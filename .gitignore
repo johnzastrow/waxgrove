@@ -1,0 +1,26 @@
+# Secrets - never commit. Provider client secrets and token-encryption keys
+# come from the environment or a secret manager, never from the repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.key
+
+# Local data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+/data/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
