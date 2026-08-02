@@ -235,9 +235,48 @@ which can be a Python sidecar if and when that feature is built. Default deploym
 single binary; self-hosters who don't want recommendations never install it. This gets Python's
 one decisive advantage without paying its deployment cost on day one.
 
-### 7.2 SQLite (dev) + MariaDB (prod)
+### 7.2 Can SQLite handle the expected concurrency?
 
-Confirmed by the project owner. Two costs to go in with eyes open about:
+**Question asked:** fewer than 10 users total, but 3+ concurrent users is realistic. Is SQLite
+sufficient?
+
+**Answer: yes, comfortably — by two or three orders of magnitude.** This workload is not close
+to any SQLite limit.
+
+In **WAL mode**, SQLite supports an **unlimited number of concurrent readers plus one writer**,
+and readers do not block the writer or each other. So concurrent *reads* — browsing playlists,
+searching the catalog, which is nearly all of Waxgrove's traffic — are genuinely parallel and
+uncontended.
+
+The real constraint is that **only one write transaction runs at a time**. Concurrent writers
+serialize: with `busy_timeout` set, a second writer waits rather than failing with
+`SQLITE_BUSY`. For Waxgrove's writes (save a playlist, add a track, update a record) that wait
+is sub-millisecond. Three concurrent users writing simultaneously is a non-event.
+
+**The risk is transaction *duration*, not user count.** The one way to make this hurt is a
+long-running write transaction — e.g. a Spotify playlist sync writing 500 tracks while holding
+the write lock, blocking everyone else's saves. Design rules that follow:
+
+- **All network I/O happens outside transactions.** Fetch from the provider, resolve, *then*
+  open a short transaction to write. Never hold the write lock across an HTTP call.
+- **Batch long syncs into chunks** — commit every N records rather than one giant transaction.
+- **Use two `*sql.DB` instances**: a write pool with `SetMaxOpenConns(1)` and a separate read
+  pool with a higher limit. Go's `database/sql` opens multiple connections by default, and each
+  gets its own SQLite lock — which manufactures `SQLITE_BUSY` contention that wouldn't otherwise
+  exist. Forcing writes through one connection serializes them cleanly at the Go layer instead.
+- **Required DSN pragmas on both pools:** `journal_mode=WAL`, `busy_timeout=5000`,
+  `foreign_keys=ON`, `synchronous=NORMAL` (safe under WAL).
+
+**Consequence for the MariaDB requirement:** load is not a reason to add MariaDB here. If it
+stays on the roadmap it should be because of existing infrastructure, backup tooling, or
+preference — all legitimate, but worth naming, because §7.3 shows the dual-dialect cost is not
+trivial. **Recommendation: ship SQLite everywhere for v1**, keep the repository seam clean, and
+add MariaDB only if a concrete need appears.
+
+### 7.3 SQLite (dev) + MariaDB (prod) — the cost of dual dialects
+
+Requested by the project owner; sequencing confirmed as **SQLite first, MariaDB adapter at M2**.
+Two costs to go in with eyes open about:
 
 1. **Full-text search does not port.** SQLite FTS5 and MariaDB InnoDB `FULLTEXT ... MATCH/AGAINST`
    have different syntax, different tokenizers, and different relevance ranking. F4 is a core
@@ -296,12 +335,38 @@ covered by JSPF export/import (see D1). Consequence to surface in the UI: the Sp
 cap applies at the instance level, so an instance with more than 5 Spotify-linked users must
 shard across additional Client IDs.
 
-### D4 — Stack — **partially resolved**
+### D4 — Stack — **RESOLVED 2026-08-02**
 
-Client and data store confirmed (§7). Language recommendation is **Go with an optional Python
-sidecar seam for future recommendation/ML features** (§7.1) — awaiting confirmation.
-Open sub-question: whether MariaDB is driven by existing infrastructure or by expected load
-(§7.2), which determines whether the dual-dialect cost is worth paying at all.
+**Go core**, with a deliberate seam for an **optional Python sidecar** serving future
+recommendation / semantic-search features over HTTP (§7.1). Default deployment stays a single
+binary.
+
+**SQLite first; MariaDB adapter deferred to M2** (§7.3). The load question that prompted the
+MariaDB requirement is answered in §7.2 — SQLite in WAL mode handles this workload with orders
+of magnitude to spare, so MariaDB is now optional rather than required. Left open, and worth
+deciding before M2 rather than now: whether to build the MariaDB adapter at all.
+
+---
+
+## 11. Resume here
+
+**Everything needed to start building M1 is decided.** No open blockers.
+
+**Next step:** scaffold the Go project — module layout, repository interface + SQLite adapter
+with the §7.2 pragmas and dual read/write pools, canonical record schema, and the M1 feature
+set from §9 (playlist CRUD, FTS5 search, MusicBrainz + MBID Mapper import, JSPF import/export,
+invite-only auth).
+
+**Decisions still to make, but none blocking M1:**
+
+1. **License** — AGPL-3.0 vs MIT (§5, N4).
+2. **Whether to build the MariaDB adapter at all** — revisit at M2 (§7.3).
+3. **Compliance** — assumed none; confirm (§6).
+4. **Prohibited patterns** — none recorded yet for this project.
+
+**Security profile to re-confirm at scaffold time** (§6): production profile; provider OAuth
+tokens are the crown jewels and must be AES-256-GCM encrypted at rest with a key from the
+environment; invite-only registration; Argon2id passwords; PKCE on every OAuth flow.
 
 ---
 
