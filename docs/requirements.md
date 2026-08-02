@@ -198,17 +198,75 @@ access to a user's real music library.
 
 ---
 
-## 7. Recommended stack
+## 7. Stack
 
-Presented as a recommendation, not a decision — see §8.
-
-| Layer | Recommendation | Reasoning |
+| Layer | Decision | Reasoning |
 |---|---|---|
-| **Language** | **Go** | Confirms the existing lean and is the right call for N1/N2: one static binary, cross-compiles to ARM for a Pi, ~20MB idle. Strong stdlib HTTP and OAuth2. The one real cost is a thinner audio-metadata ecosystem than Python's — but Waxgrove reads no audio files, so that cost mostly evaporates. |
-| **Data store** | **SQLite** (`modernc.org/sqlite`, pure Go) | Zero-admin, single-file backup, no daemon. Pure-Go driver keeps static cross-compilation trivial (no cgo). Postgres stays possible behind a repository interface if a large instance ever appears. |
-| **Search** | **SQLite FTS5** + trigram tokenizer | Satisfies F4's fuzzy search with no extra service. No Elasticsearch, no Meilisearch — both violate N1. |
-| **Client** | **PWA** served by the same binary | One artifact, no app store, installable to home screen, works on iOS/Android/desktop. Best fit for N2+N3. Trade-off: no native Apple MusicKit playback — though MusicKit JS covers web playback for subscribers. |
+| **Language** | **Go** — see §7.1 | One static binary, ARM cross-compile for a Pi, ~20MB idle. Directly serves N1/N2, the project's hardest constraints. |
+| **Data store** | **SQLite (dev) → MariaDB (prod)** — see §7.2 | Confirmed by project owner. Sequencing and dialect-parity costs discussed below. |
+| **Search** | **SQLite FTS5** / **InnoDB FULLTEXT** | Satisfies F4 with no extra service. No Elasticsearch or Meilisearch — both violate N1. Dual-dialect cost noted in §7.2. |
+| **Client** | **PWA** served by the same binary — *confirmed* | One artifact, no app store, installs to home screen on iOS/Android, works on desktop. Best fit for N2+N3. Trade-off accepted: no native MusicKit playback, though MusicKit JS covers web playback for Apple subscribers. |
 | **Auth** | Local accounts, invite-only; optional OIDC later | Small trusted groups don't need an identity provider. Keeping OIDC optional avoids forcing a dependency. |
+
+### 7.1 Go vs. Python — where Python's ecosystem would actually help
+
+The question is fair: Python's library ecosystem is far larger, and much of the open music-data
+world is written in it. Assessed against features Waxgrove might plausibly want:
+
+| Candidate feature | Python advantage | Verdict |
+|---|---|---|
+| **Recommendations / semantic search** ("more like this", auto-generated playlists) | **Decisive.** scikit-learn, `implicit`, sentence-transformers, PyTorch. Go has no comparable ecosystem. | **The only decisive case.** Not in the current requirements. |
+| **MetaBrainz interop** | MetaBrainz's own stack is Python — ListenBrainz is Flask, and **Troi**, their playlist-generation toolkit, is Python. Native integration if Waxgrove is Python too. | Real but modest — the APIs are plain REST/JSON. |
+| **Local fuzzy matching** | `rapidfuzz`, `jellyfish`, `recordlinkage` are excellent. Go has thinner equivalents. | **Mostly neutralized** — the ListenBrainz MBID Mapper does the heavy lifting remotely (§3.1). The local fallback is Jaro-Winkler over normalized strings: a few hundred lines in any language. |
+| **Audio tag reading** (`mutagen`) | Best-in-class, no Go equal. | **N/A** — Waxgrove never reads audio files. Only relevant if "assist in playing local files" ever grows into folder scanning. |
+| **Audio fingerprinting** (AcoustID) | `pyacoustid` is mature. | **N/A** — same reason. |
+| **Odd-format imports** (iTunes XML, M3U, CSV) | `pandas` + `lxml` are more pleasant. | Minor. Go's stdlib is adequate. |
+
+**Where Go wins, and why it wins here:** connector sync is a long-running, concurrent,
+rate-limited workload against several hostile APIs — goroutines plus `golang.org/x/time/rate`
+model that more cleanly than asyncio. More importantly, N1 and N2 are the *stated* priorities:
+a self-hoster running `docker run` or dropping one binary on a Pi is the target experience, and
+a Python deployment costs a runtime or a fatter container plus several times the idle memory.
+
+**Recommendation: Go, with a deliberate seam for Python later.** Recommendations and semantic
+search are the one place Python is genuinely irreplaceable — and they are also *optional,
+separable* features. Design the core to call an **optional recommendation service over HTTP**,
+which can be a Python sidecar if and when that feature is built. Default deployment stays a
+single binary; self-hosters who don't want recommendations never install it. This gets Python's
+one decisive advantage without paying its deployment cost on day one.
+
+### 7.2 SQLite (dev) + MariaDB (prod)
+
+Confirmed by the project owner. Two costs to go in with eyes open about:
+
+1. **Full-text search does not port.** SQLite FTS5 and MariaDB InnoDB `FULLTEXT ... MATCH/AGAINST`
+   have different syntax, different tokenizers, and different relevance ranking. F4 is a core
+   feature, so this means **two search implementations that must return comparable results**.
+   This is the single largest cost of dual-dialect support.
+2. **Dev/prod parity risk.** SQLite and MariaDB differ in type affinity, upsert syntax,
+   `RETURNING` support, transaction/locking semantics, and — most dangerously here — **string
+   collation and case sensitivity**. Artist and title comparison is central to matching, so a
+   collation difference is exactly the class of bug that passes in dev and fails in prod.
+
+**Recommended mitigations:**
+
+- All persistence behind a **repository interface**; no dialect-specific SQL outside a dialect
+  adapter package.
+- **Normalize aggressively in Go, not in SQL** — store a pre-computed `normalized_artist` and
+  `normalized_title` (casefolded, accent-stripped, punctuation-removed) as plain columns, and
+  match on those. This makes matching behavior identical on both engines by construction, and
+  sidesteps a known limitation of `modernc.org/sqlite`: it does not cleanly support registering
+  custom Go functions with SQLite, so custom scoring must live in Go anyway.
+- **Run the integration test suite against both engines in CI.** Non-negotiable — it is the only
+  thing that keeps parity honest.
+- **Sequence it:** build SQLite-first, add the MariaDB adapter once the schema stabilizes.
+  Maintaining two dialects while the schema is still churning doubles the churn on the
+  fastest-moving part of the codebase.
+
+*Worth noting for later:* the friends-scale workload (5–25 users, read-heavy) is well within
+SQLite-in-WAL-mode territory — it is what Navidrome and similar self-hosted apps ship in
+production. If the MariaDB requirement stems from existing infrastructure or backup tooling,
+that is a good reason; if it stems from expected load, it is likely unnecessary.
 
 ---
 
@@ -227,20 +285,23 @@ fallback that guarantees every objective remains reachable even with zero connec
 should be built first and treated as the reference implementation of sharing; connectors are
 then optimizations that remove manual steps, not prerequisites.
 
-### D2 — Client shape
+### D2 — Client shape — **RESOLVED 2026-08-02**
 
-PWA vs. native (React Native / Flutter) vs. responsive web only. **Recommend: PWA.**
+**PWA**, served by the same binary. Accepted trade-off: no native MusicKit playback.
 
-### D3 — Sharing model
+### D3 — Sharing model — **RESOLVED 2026-08-02**
 
-Does a friend group share **one instance** (simplest; the Spotify 5-user cap bites at the
-instance level), or do **separate instances federate**? **Recommend: one instance for v1**, with
-signed JSPF export/import covering cross-instance sharing. Real federation is a large lift and
-should be deferred until the core works.
+**One shared instance** per friend group. Federation is deferred; cross-instance sharing is
+covered by JSPF export/import (see D1). Consequence to surface in the UI: the Spotify 5-user
+cap applies at the instance level, so an instance with more than 5 Spotify-linked users must
+shard across additional Client IDs.
 
-### D4 — Stack confirmation
+### D4 — Stack — **partially resolved**
 
-Confirm Go + SQLite + PWA per §7, or discuss alternatives.
+Client and data store confirmed (§7). Language recommendation is **Go with an optional Python
+sidecar seam for future recommendation/ML features** (§7.1) — awaiting confirmation.
+Open sub-question: whether MariaDB is driven by existing infrastructure or by expected load
+(§7.2), which determines whether the dual-dialect cost is worth paying at all.
 
 ---
 
