@@ -90,13 +90,42 @@ and Waxgrove is required to be fully useful with **zero** connectors attached (N
 The durable asset is not the connectors. It is a **platform-neutral catalog**. Provider IDs are
 the wall; canonical identity is the hole in it.
 
-**Every song is stored as a canonical record**, keyed in priority order:
+**Every song is stored as a canonical record.**
 
 | Key | Source | Role |
 |---|---|---|
-| **ISRC** | International Standard Recording Code | Primary. A real standard (objective #4). Both Spotify and Apple expose it per track. |
-| **MusicBrainz Recording MBID** | MusicBrainz | Secondary, richer — links to release, work, artist credits. |
+| **MusicBrainz Recording MBID** | MusicBrainz | **Primary identity.** Stable, one per recording, and links out to release, work and artist credits. |
+| **ISRC** | International Standard Recording Code | **Lookup key, many-to-one.** A real standard (objective #4) that both Spotify and Apple expose per track — but see below: a recording carries *several*. |
 | Normalized `(artist, title, album, duration)` | Derived | Fallback for fuzzy matching when neither ID is present. |
+
+#### A recording has many ISRCs — corrected 2026-08-03
+
+An earlier draft made **ISRC** the primary key and MBID secondary. **That is wrong and would have
+broken deduplication.** Verified against the live MusicBrainz API: the recording *Dreams* by
+Fleetwood Mac carries **seven** ISRCs —
+
+```
+USRH11802580  USWB10101368  USWB10202603  USWB10400046
+USWB11301111  USWB19900178  USWB22600016
+```
+
+Re-releases and remasters register their own codes, so ISRC → recording is many-to-one. The
+failure this causes is precise and silent: **Spotify may return `USWB10101368` while Apple
+returns `USWB19900178` for the same recording.** Keyed on ISRC, those become two separate
+records, Ana's and Ben's imports never converge, and the global deduplication promised in §3.0
+quietly fails — in exactly the case the product exists to serve.
+
+Therefore a record holds a **set** of ISRCs, never a single column:
+
+```
+record(id, mbid, ...)                     -- MBID is identity
+record_isrc(record_id, isrc)              -- many rows per record
+```
+
+Matching becomes *"does this ISRC appear in any record's ISRC set?"*, which still resolves at
+§3.2 step 1 speed and now actually converges. Records may exist without an MBID (nothing in
+MusicBrainz matched yet); those are keyed by their ISRC set until an MBID is found, and merge
+into the MBID-keyed record when one is.
 
 Provider IDs (Spotify track URI, Apple catalog ID) attach to a canonical record as a
 **resolution cache** — never as primary identity. A record whose Spotify link goes dead is
@@ -121,6 +150,10 @@ live in one shared catalog, not in per-user libraries. Consequences:
   §3.2 immediately, which conserves scarce provider quota.
 - **Every import enriches everyone.** Local search (F4) returns songs contributed by any user,
   including songs from services the searcher does not use.
+- **The catalog has two tiers** (D11): **curated** records, deliberately added and attributed,
+  which appear in search; and **ambient** records, pulled in as a side effect of album fetches,
+  which exist only to make resolution instant and are promoted on first deliberate use (F24).
+  "Shared catalog" means the curated tier — the part the group actually built.
 
 This is consistent with §6's data classification: song metadata is **public**, so a shared
 catalog is safe. What stays **confidential** is activity — who added or played what — and
@@ -194,7 +227,8 @@ unrevocable, and improves over time on its own.
 Resolution quality is where tools in this category live or die. The rule: **never silently
 mismatch.**
 
-1. ISRC exact match → high confidence, automatic.
+1. **ISRC set membership** — the incoming ISRC appears in some record's ISRC set → high
+   confidence, automatic. (Set membership, not column equality — see §3's multi-ISRC note.)
 2. MBID match → high confidence, automatic.
 3. **ListenBrainz MBID Mapper** on `(artist, title)` → confidence from the mapper.
 4. Local fuzzy `(normalized artist, normalized title, duration ±3s)` → scored confidence.
@@ -385,9 +419,15 @@ Two consequences:
 
 | Source | Limit |
 |---|---|
-| MusicBrainz | **1 req/sec, hard** — a 45-track cold-cache playlist is 45s of MusicBrainz alone |
+| MusicBrainz | **~1 req/sec averaged, as a burst bucket** — live headers return `x-ratelimit-limit: 1200` with a reset window, so short bursts are tolerated rather than each call being gated |
 | Spotify (Dev Mode) | quota pooled per developer account — which is what BYO-first (D6) fixes |
 | Apple | rate-limited per developer token |
+
+**Requests are album-shaped, not track-shaped.** A single release lookup
+(`inc=recordings+isrcs+artist-credits`) returns the entire tracklist with every ISRC — verified
+at 11 tracks in 11KB in 0.39s. So a playlist drawing on 12 albums costs far fewer requests than
+its 45 tracks suggest, and D11 caches the surplus tracks as ambient records so later resolutions
+are free. An earlier draft's "45 tracks means 45 seconds" was pessimistic on both counts.
 
 So a cold export can exceed a minute. It **must** run as a resumable background job with
 progress, not inside a request/response — the UI counterpart to §7.2's rule that network I/O
@@ -453,6 +493,9 @@ possible, and the six interface consequences that follow from these constraints.
 - **F23** — **Mirror across your own services** in one action, for the minority of users holding
   both Spotify and Apple Music (goal 1). Composes F6 → resolution → F7 over the canonical layer;
   not new architecture, but it should not require a manual import-then-export.
+- **F24** — **Ambient records are promoted to curated on first deliberate use** (D11) — when a
+  user adds one to a crate or playlist it gains provenance and enters F4 search. Until then it
+  exists only to make resolution instant.
 
 > **Schema-now, UI-later.** F17 and F18 shape the data model and are therefore built into the
 > v1 schema even where their interface lands in v1.x. Retrofitting revisions and blame onto
@@ -686,6 +729,37 @@ append-only revision model onto mutable playlists after real data exists is the 
 exportable, and annotatable by others; forking is explicit (F20). **Ratings are per-user with
 an aggregate displayed.** **Tags come in two kinds — private and shared.** Annotations never
 write to the playlist revision history (§3.4).
+
+### D11 — Two-tier catalog: curated and ambient — **RESOLVED 2026-08-03**
+
+**Fetch whole albums, cache them, but do not enshrine them.**
+
+One MusicBrainz release lookup returns the entire tracklist with ISRCs in a single request
+(verified: 11 tracks, 11KB, 0.39s). In the import path that costs roughly **two extra requests
+per distinct album**, not per track — cheap enough to be worth taking.
+
+Storage is a non-issue at friends scale: ~11KB per album means a thousand albums is ~11MB. **The
+real cost is curation, not capacity.** §3.0 makes the shared catalog meaningful precisely because
+someone *chose* each record — "added by Ana" is provenance. Auto-imported album tracks have
+nobody behind them, and letting them into F4 search turns the Grove from something a group built
+together into a partial mirror of MusicBrainz. Prefetching on the assumption that a user "likes
+that kind of music" is also a recommendation heuristic entering the data model, which belongs in
+the optional Python sidecar (D4), not in canonical identity.
+
+The resolution is two tiers over one table:
+
+| | **Curated** — "in the grove" | **Ambient** — "known to the grove" |
+|---|---|---|
+| Arrives by | Deliberate add | Side effect of an album fetch |
+| Provenance | Attributed to a user | None |
+| In F4 search | Yes | No — a secondary section at most |
+| Available for instant resolution | Yes | **Yes** |
+| On first deliberate use | — | **Promoted to curated** (F24) |
+
+This takes the whole benefit — future resolutions of those tracks cost nothing, which is exactly
+what §3.0 promises — while keeping search honest. The interface pattern already exists: the phone
+mockups separate "In the catalogue" from "Elsewhere — MusicBrainz". This simply makes "elsewhere"
+mostly local, and instant.
 
 ### D9 — Metadata sources — **RESOLVED 2026-08-03**
 

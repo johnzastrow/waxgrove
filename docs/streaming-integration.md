@@ -157,9 +157,20 @@ Full treatment in `requirements.md` §3.6.
 
 | Source | Limit |
 |---|---|
-| MusicBrainz | **1 req/sec, hard**, User-Agent required — a 45-track cold-cache playlist is 45s of MusicBrainz alone |
+| MusicBrainz | **~1 req/sec averaged, implemented as a burst bucket.** Live responses carry `x-ratelimit-limit: 1200`, `x-ratelimit-remaining` and a reset timestamp — respect the headers rather than assuming a hard per-call gate. User-Agent required. |
 | Spotify (Dev Mode) | Quota pooled **per developer account** — precisely what BYO-first (D6) fixes |
 | Apple | Rate-limited per developer token |
+
+**Requests are album-shaped, not track-shaped.** One release lookup with
+`inc=recordings+isrcs+artist-credits` returns the whole tracklist and every ISRC — measured at
+11 tracks, 11KB, 0.39s. A 45-track playlist drawn from a dozen albums therefore costs roughly a
+dozen requests, not forty-five, and D11 keeps the surplus tracks as ambient records so later
+resolutions cost nothing at all.
+
+**Watch for the multi-ISRC trap.** A single recording carries several ISRCs — *Dreams* by
+Fleetwood Mac has seven. Spotify and Apple may each return a *different* one for the same
+recording, so match on **ISRC set membership**, never on a single stored ISRC column, or the two
+services' imports will never converge. See `requirements.md` §3.
 
 A cold export can exceed a minute. It must run as a **resumable background job with visible
 progress** (F22), never inside a request/response. This is the UI counterpart to §7.2's rule
