@@ -350,12 +350,28 @@ deciding before M2 rather than now: whether to build the MariaDB adapter at all.
 
 ## 11. Resume here
 
-**Everything needed to start building M1 is decided.** No open blockers.
+> **UNINTEGRATED INPUT — read before scaffolding (added 2026-08-03).** A "Goals" section was
+> added to `objectives.md` that this document has not yet absorbed. One item **contradicts a
+> decision recorded here**, and two others expand v1 scope materially. Reconcile these before
+> writing code, because they change the schema and the auth design.
+>
+> | New goal | Effect on this document |
+> |---|---|
+> | **OIDC logins** | **Direct conflict with §7**, which specifies local accounts with Argon2id and defers OIDC. If OIDC is now a v1 requirement, §6 and §7 need rewriting: no local password storage, no Argon2id, and the invite-only model becomes an authorization concern rather than a registration one. |
+> | **User tagging, shared tagging, comments, playlist version tracking, user blame** | Substantial new domain model. Version tracking plus blame means playlists need an append-only revision history keyed to users, not just mutable ordered lists (§3). Affects the schema before it is written — cheap now, expensive later. |
+> | **Minimal-click cross-service sync** (Apple ↔ Spotify directly) | A UX requirement on the resolution layer (§3.2). Compatible with canonical identity, but implies bidirectional sync flows that F6/F7 currently describe only as separate import and export. |
+> | **Rating playlists** | Minor addition to the domain model. |
+> | **"Creation of playlists inside the app from…"** | Sentence is incomplete in `objectives.md` — needs finishing before it can be specced. |
+>
+> Goals 6 and 7 are empty placeholders.
 
-**Next step:** scaffold the Go project — module layout, repository interface + SQLite adapter
-with the §7.2 pragmas and dual read/write pools, canonical record schema, and the M1 feature
-set from §9 (playlist CRUD, FTS5 search, MusicBrainz + MBID Mapper import, JSPF import/export,
-invite-only auth).
+**Next step:** reconcile the goals above into §§3–7, then scaffold the Go project — module
+layout, repository interface + SQLite adapter with the §7.2 pragmas and dual read/write pools,
+canonical record schema, and the M1 feature set from §9 (playlist CRUD, FTS5 search,
+MusicBrainz + MBID Mapper import, JSPF import/export, auth per the resolved OIDC question).
+
+**Toolchain confirmed on the Windows workstation:** Go 1.26.5, `CGO_ENABLED=0` — which suits
+the pure-Go `modernc.org/sqlite` driver chosen in §7.
 
 **Decisions still to make, but none blocking M1:**
 

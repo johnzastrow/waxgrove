@@ -25,3 +25,16 @@ Mobile-first app to share songs and playlists between friends, regardless of the
 ## Names:
 
 *   Sonic Unwalled Garden Library Exchange - representing music collection management and sharing that is unconstrained by corporate paywalls.
+
+
+
+## Goals:
+
+1. Very easy-to-use app for sharing playlists between users with non-clunky, intuitive and modern UI/UX interactions. 
+   1. As few "clicks" as possible to sync selected playlists to and from the supported streaming servers, and across streaming services (for example, Apple Music playlist coming into Spotify ad Vice Versa)
+2. Also supported extended information about songs, artists, albums and playlists. Support user-tagging and shared tagging, user comments, playlist version tracking, user blame
+3. OIDC logins
+4. Creation of playlists inside the app from
+5. Rating playlists
+6. 
+7. 
