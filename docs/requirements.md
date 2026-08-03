@@ -730,37 +730,6 @@ exportable, and annotatable by others; forking is explicit (F20). **Ratings are 
 an aggregate displayed.** **Tags come in two kinds — private and shared.** Annotations never
 write to the playlist revision history (§3.4).
 
-### D11 — Two-tier catalog: curated and ambient — **RESOLVED 2026-08-03**
-
-**Fetch whole albums, cache them, but do not enshrine them.**
-
-One MusicBrainz release lookup returns the entire tracklist with ISRCs in a single request
-(verified: 11 tracks, 11KB, 0.39s). In the import path that costs roughly **two extra requests
-per distinct album**, not per track — cheap enough to be worth taking.
-
-Storage is a non-issue at friends scale: ~11KB per album means a thousand albums is ~11MB. **The
-real cost is curation, not capacity.** §3.0 makes the shared catalog meaningful precisely because
-someone *chose* each record — "added by Ana" is provenance. Auto-imported album tracks have
-nobody behind them, and letting them into F4 search turns the Grove from something a group built
-together into a partial mirror of MusicBrainz. Prefetching on the assumption that a user "likes
-that kind of music" is also a recommendation heuristic entering the data model, which belongs in
-the optional Python sidecar (D4), not in canonical identity.
-
-The resolution is two tiers over one table:
-
-| | **Curated** — "in the grove" | **Ambient** — "known to the grove" |
-|---|---|---|
-| Arrives by | Deliberate add | Side effect of an album fetch |
-| Provenance | Attributed to a user | None |
-| In F4 search | Yes | No — a secondary section at most |
-| Available for instant resolution | Yes | **Yes** |
-| On first deliberate use | — | **Promoted to curated** (F24) |
-
-This takes the whole benefit — future resolutions of those tracks cost nothing, which is exactly
-what §3.0 promises — while keeping search honest. The interface pattern already exists: the phone
-mockups separate "In the catalogue" from "Elsewhere — MusicBrainz". This simply makes "elsewhere"
-mostly local, and instant.
-
 ### D9 — Metadata sources — **RESOLVED 2026-08-03**
 
 **MusicBrainz remains the identity authority.** Added as resolvers and enrichers only:
@@ -791,6 +760,37 @@ Consequences to design for:
   synced to two services, at different revisions.
 - One-way means the provider copy is a **projection**, never a source of truth. Waxgrove's
   revision history (F17) remains authoritative.
+
+### D11 — Two-tier catalog: curated and ambient — **RESOLVED 2026-08-03**
+
+**Fetch whole albums, cache them, but do not enshrine them.**
+
+One MusicBrainz release lookup returns the entire tracklist with ISRCs in a single request
+(verified: 11 tracks, 11KB, 0.39s). In the import path that costs roughly **two extra requests
+per distinct album**, not per track — cheap enough to be worth taking.
+
+Storage is a non-issue at friends scale: ~11KB per album means a thousand albums is ~11MB. **The
+real cost is curation, not capacity.** §3.0 makes the shared catalog meaningful precisely because
+someone *chose* each record — "added by Ana" is provenance. Auto-imported album tracks have
+nobody behind them, and letting them into F4 search turns the Grove from something a group built
+together into a partial mirror of MusicBrainz. Prefetching on the assumption that a user "likes
+that kind of music" is also a recommendation heuristic entering the data model, which belongs in
+the optional Python sidecar (D4), not in canonical identity.
+
+The resolution is two tiers over one table:
+
+| | **Curated** — "in the grove" | **Ambient** — "known to the grove" |
+|---|---|---|
+| Arrives by | Deliberate add | Side effect of an album fetch |
+| Provenance | Attributed to a user | None |
+| In F4 search | Yes | No — a secondary section at most |
+| Available for instant resolution | Yes | **Yes** |
+| On first deliberate use | — | **Promoted to curated** (F24) |
+
+This takes the whole benefit — future resolutions of those tracks cost nothing, which is exactly
+what §3.0 promises — while keeping search honest. The interface pattern already exists: the phone
+mockups separate "In the catalogue" from "Elsewhere — MusicBrainz". This simply makes "elsewhere"
+mostly local, and instant.
 
 ---
 
