@@ -313,9 +313,37 @@ on Apple Music" is the *normal* outcome, not an error. Each record therefore car
 export status, and the user is shown what did not transfer rather than quietly receiving a
 shorter playlist (F15).
 
-**Cost note:** this flow needs *both* connectors — an Apple Developer membership ($99/yr, paid
-by the operator) and a Spotify app (BYO per user, or an operator slot). It is the most
-connector-expensive path in the product, and self-hosters should be told so up front.
+**Cost note:** this flow needs *both* connectors present **on the instance** — an Apple Developer
+membership ($99/yr, paid by the operator) and a Spotify app (BYO per user, or an operator slot).
+It is the most connector-expensive path in the product, and self-hosters should be told so up
+front.
+
+#### Most users hold one service, not two
+
+**Assume a user has exactly one connector.** Some will hold both; most hold one or the other.
+Waxgrove never requires an individual to have two services — it requires the *group* to span
+them. That is the unwalled-garden claim actually working: each person stays inside their own
+walled garden, and the exchange happens anyway.
+
+This gives two distinct bridge patterns, which earlier drafts conflated:
+
+| Pattern | Who | Frequency |
+|---|---|---|
+| **Between people** | Ana (Spotify) → Ben (Apple); each holds one service | The common case — §3.5 |
+| **Between your own services** | One person holding both, mirroring Apple ↔ Spotify for themselves | The minority, but it is goal 1's stated example and must work |
+
+Design consequences:
+
+1. **A single connected service is the normal state, not a half-finished setup.** The interface
+   must never nag about, or appear broken because of, an unconnected service. Zero connectors is
+   also fully valid (N6).
+2. **Per-service availability is about group reach, not just export results.** For a Spotify-only
+   user, an Apple Music availability column is not noise about an export she will never perform —
+   it tells her **whether her Apple Music friends can play what she just made**. F15 should
+   therefore read as *"who this reaches"* rather than *"what failed"*, which is the more useful
+   framing for the single-service majority.
+3. **The both-services user deserves a direct affordance** — mirroring one of their own playlists
+   across their two services in a single action, rather than a manual import-then-export.
 
 ### 3.6 Provider resolution, storefronts, and why sync is a job
 
@@ -392,8 +420,11 @@ possible, and the six interface consequences that follow from these constraints.
 - **F9** — Share a playlist or song with another user on the instance, **by reference** (§3.4).
 - **F10** — Per-user connection of a streaming account via OAuth, with revocation.
 - **F11** — Deep-link out to a song on the user's preferred service for playback.
-- **F15** — Report **per-service export status** per record; show the user what did not
-  transfer rather than silently delivering a shorter playlist (§3.5).
+- **F15** — Report **per-service, per-storefront availability** per record. Two readings, both
+  required: for the user exporting, what did not transfer rather than a silently shorter
+  playlist; and for **every** user — including the single-service majority who will never export
+  to that service — **which of their friends can play this** (§3.5). Availability is group reach,
+  not just an export result.
 - **F16** — **The crate**: a persistent per-user staging area accumulating candidates from any
   source, committed to a playlist as one authored revision (§3.3). Includes the
   direct-to-playlist fast path that bypasses staging for clean high-confidence imports.
@@ -419,6 +450,9 @@ possible, and the six interface consequences that follow from these constraints.
   tags, and attributed comments (§3.4). *The schema for these ships in v1 (D7); only the UI is
   deferred.*
 - **F20** — Fork a shared playlist into the user's own, with provenance back to the original.
+- **F23** — **Mirror across your own services** in one action, for the minority of users holding
+  both Spotify and Apple Music (goal 1). Composes F6 → resolution → F7 over the canonical layer;
+  not new architecture, but it should not require a manual import-then-export.
 
 > **Schema-now, UI-later.** F17 and F18 shape the data model and are therefore built into the
 > v1 schema even where their interface lands in v1.x. Retrofitting revisions and blame onto
