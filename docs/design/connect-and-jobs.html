@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waxgrove — Connect Wizard & Job Surface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wax-900:#0B0C09; --wax-800:#121410; --wax-700:#1A1D17; --wax-600:#242820; --wax-500:#31362B;
+  --grove-800:#1B2719; --grove-600:#2C4029; --grove-500:#3D5638; --grove-300:#7A9670;
+  --cream-100:#F4EEDE; --cream-200:#E5DCC5; --cream-300:#CFC3A5;
+  --copper:#C07B45; --copper-br:#DFA063; --ember:#A8512A; --warn:#C9A227; --bad:#A8512A;
+  --display:"Fraunces",Georgia,serif; --ui:"IBM Plex Sans",sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--wax-900);color:var(--cream-200);font-family:var(--ui);line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(ellipse 80% 40% at 50% -8%, rgba(61,86,56,.18), transparent 70%)}
+.wrap{max-width:1420px;margin:0 auto;padding:0 24px 120px}
+section{padding:64px 0;border-top:1px solid var(--wax-600)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--copper);margin-bottom:16px}
+h1{font-family:var(--display);font-size:clamp(34px,5vw,56px);font-weight:600;color:var(--cream-100);letter-spacing:-.03em;line-height:1.02}
+h2{font-family:var(--display);font-weight:500;font-size:clamp(24px,3vw,34px);color:var(--cream-100);margin-bottom:10px}
+.lede{max-width:68ch;color:var(--cream-300);font-size:16px}
+.hero{padding:84px 0 24px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:32px}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+.two>div{border:1px solid var(--wax-600);border-radius:4px;padding:22px;background:var(--wax-800)}
+.two b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--copper);margin-bottom:9px}
+.two p{font-size:14.5px;color:var(--cream-300)}
+.two i{color:var(--cream-100);font-style:normal;font-weight:600}
+
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(316px,1fr));gap:32px;margin-top:34px}
+.phone{background:var(--wax-800);border:1px solid var(--wax-600);border-radius:26px;padding:11px;box-shadow:0 30px 70px -30px #000}
+.scr{background:var(--wax-900);border-radius:18px;overflow:hidden;height:672px;display:flex;flex-direction:column;position:relative}
+.cap{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--copper);margin:16px 0 0;text-align:center}
+.capsub{font-size:12.5px;color:var(--cream-300);text-align:center;margin-top:5px;line-height:1.5}
+
+.bar{padding:15px 16px 11px;border-bottom:1px solid var(--wax-700);flex:0 0 auto}
+.bar .t{font-family:var(--display);font-size:18px;color:var(--cream-100);font-weight:500}
+.bar .sub{font-family:var(--mono);font-size:9.5px;color:var(--cream-300);opacity:.7;letter-spacing:.08em}
+.body{overflow:hidden;flex:1;padding:13px 15px}
+.cta{position:absolute;left:0;right:0;bottom:0;padding:13px 15px;background:linear-gradient(transparent,var(--wax-900) 26%);display:flex;gap:9px}
+.btn{flex:1;background:var(--grove-600);color:var(--cream-100);border:none;border-radius:3px;padding:12px;
+  font-family:var(--ui);font-size:13px;font-weight:600;cursor:pointer}
+.btn.g{background:transparent;border:1px solid var(--wax-600);color:var(--cream-300)}
+.btn.sm{padding:6px 11px;font-size:11.5px;flex:0 0 auto}
+
+/* wizard bits */
+.steps{display:flex;gap:5px;margin-bottom:14px}
+.steps i{flex:1;height:3px;border-radius:2px;background:var(--wax-600)}
+.steps i.on{background:var(--copper)} .steps i.done{background:var(--grove-500)}
+.opt{border:1px solid var(--wax-600);border-radius:4px;padding:14px;margin-bottom:11px;background:var(--wax-800)}
+.opt.pick{border-color:var(--grove-500);background:rgba(61,86,56,.14)}
+.opt .h{font-size:13.5px;color:var(--cream-100);font-weight:600;display:flex;align-items:center;gap:7px}
+.opt .d{font-size:12px;color:var(--cream-300);margin-top:5px;line-height:1.5}
+.opt .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--grove-500);color:var(--grove-300);border-radius:2px;padding:2px 6px}
+.opt .tag.w{border-color:var(--warn);color:var(--warn)}
+.num{display:flex;gap:11px;margin-bottom:13px}
+.num .n{flex:0 0 21px;height:21px;border-radius:50%;border:1px solid var(--copper);color:var(--copper);
+  font-family:var(--mono);font-size:10.5px;display:grid;place-items:center;margin-top:1px}
+.num .x{font-size:12.5px;color:var(--cream-200);line-height:1.5}
+.num .x b{color:var(--cream-100)}
+.copy{background:var(--wax-700);border:1px solid var(--wax-600);border-radius:3px;padding:8px 10px;
+  font-family:var(--mono);font-size:10px;color:var(--grove-300);margin-top:6px;display:flex;
+  justify-content:space-between;align-items:center;gap:8px;word-break:break-all}
+.copy span:last-child{color:var(--copper);flex:0 0 auto;font-size:9px;letter-spacing:.1em}
+.field{background:var(--wax-800);border:1px solid var(--wax-600);border-radius:3px;padding:9px 11px;
+  font-family:var(--mono);font-size:11px;color:var(--cream-300);margin-top:5px}
+.field.filled{color:var(--cream-100);border-color:var(--grove-500)}
+.lbl{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--cream-300);opacity:.75;margin-top:13px}
+.why{border-left:2px solid var(--wax-600);padding:9px 0 9px 11px;margin-top:13px}
+.why .h{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--copper)}
+.why .b{font-size:11.5px;color:var(--cream-300);margin-top:4px;line-height:1.5}
+.ok{background:rgba(61,86,56,.16);border-left:2px solid var(--grove-500);padding:10px 12px;border-radius:0 2px 2px 0}
+.ok .h{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--grove-300)}
+.ok .b{font-size:11.5px;color:var(--cream-200);margin-top:3px;line-height:1.5}
+.note{background:rgba(168,81,42,.1);border-left:2px solid var(--ember);padding:9px 11px;border-radius:0 2px 2px 0;margin-top:11px}
+.note .h{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--copper-br)}
+.note .b{font-size:11.5px;color:var(--cream-300);margin-top:3px;line-height:1.45}
+
+/* job bits */
+.phase{display:flex;align-items:center;gap:7px;margin:12px 0 10px}
+.phase .p{flex:1;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;padding:5px 0;border-radius:2px;border:1px solid var(--wax-600);color:var(--cream-300);opacity:.6}
+.phase .p.done{border-color:var(--grove-500);color:var(--grove-300);opacity:1}
+.phase .p.now{border-color:var(--copper);color:var(--copper-br);opacity:1;background:rgba(192,123,69,.1)}
+.prog{height:5px;border-radius:3px;background:var(--wax-700);overflow:hidden;margin:9px 0 5px}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--grove-500),var(--grove-300))}
+.pmeta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--cream-300);opacity:.8}
+.row{display:flex;gap:9px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--wax-700)}
+.row .m{flex:1;min-width:0}
+.row .ti{font-size:12.5px;color:var(--cream-100);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ar{font-size:11px;color:var(--cream-300);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-family:var(--mono);font-size:9.5px;white-space:nowrap}
+.st.g{color:var(--grove-300)} .st.w{color:var(--warn)} .st.b{color:var(--bad)} .st.d{color:var(--cream-300);opacity:.55}
+.sect{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--copper);margin:14px 0 6px}
+.tick{width:16px;height:16px;flex:0 0 auto}
+
+/* desktop frame */
+.frame{border:1px solid var(--wax-600);border-radius:9px;overflow:hidden;background:var(--wax-800);
+  box-shadow:0 34px 80px -34px #000;margin-top:26px}
+.chrome{height:32px;background:var(--wax-700);display:flex;align-items:center;padding:0 13px;gap:7px;border-bottom:1px solid var(--wax-600)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--wax-500)}
+.url{flex:1;text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--cream-300);opacity:.55}
+.app{display:grid;grid-template-columns:196px 1fr 322px;height:560px;background:var(--wax-900)}
+.rail{border-right:1px solid var(--wax-700);padding:15px 12px;background:var(--wax-800)}
+.brand{display:flex;align-items:center;gap:9px;padding:0 5px 14px;margin-bottom:7px;border-bottom:1px solid var(--wax-700)}
+.brand .nm{font-family:var(--display);font-size:16px;color:var(--cream-100);font-weight:600}
+.brand .nm em{color:var(--grove-300);font-style:normal}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:3px;text-decoration:none;color:var(--cream-300);font-size:12.5px}
+.nav a.on{background:var(--grove-800);color:var(--cream-100);font-weight:600}
+.nav a .c{margin-left:auto;font-family:var(--mono);font-size:10px;opacity:.7}
+.jobchip{margin-top:14px;border:1px solid var(--copper);border-radius:3px;padding:9px 10px;background:rgba(192,123,69,.09)}
+.jobchip .h{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--copper-br)}
+.jobchip .b{font-size:11.5px;color:var(--cream-200);margin-top:3px;line-height:1.35}
+.top{height:50px;border-bottom:1px solid var(--wax-700);display:flex;align-items:center;gap:12px;padding:0 18px}
+.top .h{font-family:var(--display);font-size:18px;color:var(--cream-100);font-weight:500}
+.top .sub{font-family:var(--mono);font-size:9.5px;color:var(--cream-300);opacity:.65}
+.main{display:flex;flex-direction:column;overflow:hidden}
+.mbody{flex:1;overflow:hidden;padding:14px 18px}
+.aside{border-left:1px solid var(--wax-700);background:var(--wax-800);padding:16px;overflow:hidden}
+.win{margin-top:18px;border-left:2px solid var(--grove-500);background:rgba(61,86,56,.10);padding:13px 17px;border-radius:0 3px 3px 0}
+.win b{color:var(--grove-300);font-size:12.5px} .win p{font-size:13.5px;color:var(--cream-300);margin-top:4px}
+.ftr{font-family:var(--mono);font-size:11px;color:var(--cream-300);opacity:.55;text-align:center;padding-top:56px;line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <div class="eyebrow">Waxgrove — connect wizard (F13) &amp; job surface (F22)</div>
+  <h1>The two hard<br>surfaces</h1>
+  <p class="lede" style="margin-top:22px">Neither is glamorous, and both are where a self-hosted app
+  usually loses people. They are hard for opposite reasons.</p>
+  <div class="two">
+    <div><b>Connect — the leaving problem</b><p>BYO-first (D6) means the user must go to
+      <i>developer.spotify.com</i>, create an app, and come back with two values. The wizard has to
+      survive the user <i>leaving</i>, be unambiguous about what to copy where, and be honest that
+      this friction is Spotify's rule, not ours.</p></div>
+    <div><b>Jobs — the waiting problem</b><p>MusicBrainz allows one request per second, so a cold
+      45-track sync exceeds a minute. The user must be able to <i>walk away</i>, know what is
+      happening, and get the truth about what failed — not a spinner and a shrug.</p></div>
+  </div>
+</div>
+
+<!-- ================= CONNECT ================= -->
+<section>
+  <div class="eyebrow">Connect 01</div>
+  <h2>Choosing a path, honestly</h2>
+  <p class="lede">The first screen must do something most onboarding avoids: say plainly that you do not
+  need this at all. Waxgrove is required to be fully useful with zero connectors (N6), so the wizard
+  opens by making the free path visible rather than burying it.</p>
+
+  <div class="screens">
+    <!-- 1. choose path -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Connect Spotify</div>
+          <div class="sub">step 1 of 4 · choose how</div></div>
+        <div class="body">
+          <div class="steps"><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="opt pick">
+            <div class="h">Use your own Spotify app <span class="tag">recommended</span></div>
+            <div class="d">About 5 minutes, once. No user limit, and you get your own request quota
+              rather than sharing the instance's. Needs Spotify Premium.</div>
+          </div>
+          <div class="opt">
+            <div class="h">Use this instance's app <span class="tag w">2 of 5 left</span></div>
+            <div class="d">Instant, nothing to set up. Limited to 5 people across the whole instance,
+              and everyone shares one request budget. Best saved for people who can't do the above.</div>
+          </div>
+          <div class="why"><div class="h">Why is this so awkward?</div>
+            <div class="b">Spotify grants wider access only to organisations with 250,000+ monthly
+              users, which a friends' app can never be. So everyone brings their own credentials.
+              Their rule, not ours.</div></div>
+          <div class="ok" style="margin-top:11px"><div class="h">You can skip this entirely</div>
+            <div class="b">Waxgrove works fully unconnected — search, playlists, sharing and
+              JSPF import/export.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Use my own app</button>
+          <button class="btn g">Skip</button></div>
+      </div></div>
+      <div class="cap">Connect 01 · Choose</div>
+      <div class="capsub">Recommended path first, the scarce shared slots second, and the exit
+      visible. Slot count is live, per D6.</div>
+    </div>
+
+    <!-- 2. create the app -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Create your app</div>
+          <div class="sub">step 2 of 4 · on Spotify's site</div></div>
+        <div class="body">
+          <div class="steps"><i class="done"></i><i class="on"></i><i></i><i></i></div>
+          <div class="num"><div class="n">1</div><div class="x">Open
+            <b>developer.spotify.com/dashboard</b> and sign in.</div></div>
+          <div class="num"><div class="n">2</div><div class="x">Click <b>Create app</b>. Name it
+            anything — <b>Waxgrove</b> is fine.</div></div>
+          <div class="num"><div class="n">3</div><div class="x">Paste this into
+            <b>Redirect URI</b>, exactly:
+            <div class="copy"><span>https://waxgrove.hollis.family/auth/spotify/callback</span><span>COPY</span></div>
+          </div></div>
+          <div class="num"><div class="n">4</div><div class="x">Tick <b>Web API</b>, save, then open
+            <b>Settings</b> to find your two values.</div></div>
+          <div class="note"><div class="h">Leave this page open</div>
+            <div class="b">Your progress is saved. Come back to this tab when you have the Client ID
+              and Secret — nothing is lost if you close it either.</div></div>
+        </div>
+        <div class="cta"><button class="btn">I've created it</button>
+          <button class="btn g">Back</button></div>
+      </div></div>
+      <div class="cap">Connect 02 · The external step</div>
+      <div class="capsub">The screen the whole wizard exists for. Numbered, literal, with the exact
+      string to paste and explicit reassurance about leaving.</div>
+    </div>
+
+    <!-- 3. paste creds -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Your credentials</div>
+          <div class="sub">step 3 of 4 · paste and verify</div></div>
+        <div class="body">
+          <div class="steps"><i class="done"></i><i class="done"></i><i class="on"></i><i></i></div>
+          <div class="lbl" style="margin-top:4px">Client ID</div>
+          <div class="field filled">4f8c2b1e9a7d43f0b6c8e2a1d9f37b54</div>
+          <div class="lbl">Client secret</div>
+          <div class="field">••••••••••••••••••••••••••••••••</div>
+          <div class="ok" style="margin-top:14px"><div class="h">Stored encrypted</div>
+            <div class="b">Your secret is encrypted at rest with AES-256-GCM and never appears in
+              logs, exports, or on screen again.</div></div>
+          <div class="why"><div class="h">Redirect URI mismatch?</div>
+            <div class="b">The most common failure. It must match character for character, including
+              https and the trailing path — no trailing slash.</div></div>
+          <div class="note"><div class="h">Spotify Premium required</div>
+            <div class="b">Spotify requires the owner of an app to hold Premium. If you're on the free
+              tier, go back and take one of the instance's shared slots instead.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Verify &amp; continue</button></div>
+      </div></div>
+      <div class="cap">Connect 03 · Credentials</div>
+      <div class="capsub">Secret is write-only from here on. The two failure modes that actually
+      happen — URI mismatch and free-tier accounts — are pre-empted rather than left to an error.</div>
+    </div>
+
+    <!-- 4. connected -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Connected</div>
+          <div class="sub">spotify · your own app</div></div>
+        <div class="body">
+          <div class="steps"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i></div>
+          <div style="display:grid;place-items:center;padding:14px 0 6px">
+            <svg width="76" height="76" viewBox="0 0 100 100" fill="none">
+              <circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="4"/>
+              <circle cx="50" cy="50" r="30" stroke="#7A9670" stroke-width="4"/>
+              <circle cx="50" cy="50" r="18" stroke="#7A9670" stroke-width="4"/>
+              <circle cx="50" cy="50" r="4.5" fill="#7A9670"/></svg>
+          </div>
+          <div style="text-align:center;font-size:13px;color:var(--cream-200)">Signed in as
+            <b style="color:var(--cream-100)">ana.hollis</b></div>
+          <div class="lbl">Your quota today</div>
+          <div class="prog"><i style="width:12%"></i></div>
+          <div class="pmeta"><span>12% used</span><span>your own budget</span></div>
+          <div class="lbl">What this unlocks</div>
+          <div style="font-size:12.5px;color:var(--cream-200);line-height:1.75">
+            Import a playlist by pasting its link<br>
+            Sync Waxgrove playlists into Spotify<br>
+            Deep-link out to songs for playback</div>
+          <div class="why"><div class="h">Importing works by link</div>
+            <div class="b">Spotify's current API can't list your playlists, so import asks you to paste
+              a playlist link. In Spotify: ⋯ → Share → Copy link.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Import a playlist</button>
+          <button class="btn g">Done</button></div>
+      </div></div>
+      <div class="cap">Connect 04 · Connected</div>
+      <div class="capsub">Quota is visible from the first moment, because under Development Mode it
+      is genuinely exhaustible. The link-paste quirk is explained here, not discovered later.</div>
+    </div>
+  </div>
+
+  <div class="win"><b>The design decisions that matter here</b>
+    <p>Name the awkwardness and whose fault it is; show the free path before the paid friction;
+    make the external step literal and resumable; surface quota immediately; and pre-empt the two
+    real failure modes rather than letting them become support questions.</p></div>
+</section>
+
+<!-- ================= JOBS ================= -->
+<section>
+  <div class="eyebrow">Jobs 01</div>
+  <h2>A sync you can walk away from</h2>
+  <p class="lede">MusicBrainz permits one request per second, so a cold 45-track export takes over a
+  minute (§3.6). That rules out a modal spinner. It has to be a job: backgrounded, resumable,
+  inspectable, and honest about partial failure.</p>
+
+  <div class="frame">
+    <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">waxgrove.hollis.family/jobs/sync-4471</span></div>
+    <div class="app">
+      <div class="rail">
+        <div class="brand">
+          <svg width="22" height="22" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#3D5638" stroke-width="6" stroke-dasharray="220 44"/>
+            <circle cx="50" cy="50" r="24" stroke="#C07B45" stroke-width="6" stroke-dasharray="120 30" transform="rotate(35 50 50)"/>
+            <circle cx="50" cy="50" r="5" fill="#C07B45"/></svg>
+          <div class="nm">Wax<em>grove</em></div></div>
+        <div class="nav">
+          <a href="#">The Grove <span class="c">1284</span></a>
+          <a href="#">Your crate <span class="c">14</span></a>
+          <a href="#">Playlists <span class="c">23</span></a>
+          <a href="#">Needs review <span class="c">12</span></a>
+          <a href="#">Settings</a></div>
+        <div class="jobchip"><div class="h">1 job running</div>
+          <div class="b">Porch, July → Apple<br>28 of 45 · ~40s left</div></div>
+      </div>
+      <div class="main">
+        <div class="top"><div><div class="h">Syncing to Apple Music</div>
+          <div class="sub">Porch, July · revision 7 · storefront us</div></div></div>
+        <div class="mbody">
+          <div class="phase"><div class="p done">Queued</div><div class="p now">Resolving 28/45</div>
+            <div class="p">Writing</div><div class="p">Done</div></div>
+          <div class="prog"><i style="width:62%"></i></div>
+          <div class="pmeta"><span>28 of 45 resolved · 3 unavailable</span><span>~40s remaining</span></div>
+          <div class="note" style="margin-top:12px"><div class="h">Why this takes a minute</div>
+            <div class="b">MusicBrainz allows one request per second and Waxgrove respects that
+              strictly. Records already in the shared catalogue resolve instantly — this instance gets
+              faster the more it is used.</div></div>
+          <div class="sect">Live</div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="11"/><circle cx="50" cy="50" r="16" stroke="#7A9670" stroke-width="11"/></svg>
+            <div class="m"><div class="ti">Northern Sky</div><div class="ar">Nick Drake</div></div>
+            <div class="st g">cached · 0ms</div></div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="11"/><circle cx="50" cy="50" r="16" stroke="#7A9670" stroke-width="11"/></svg>
+            <div class="m"><div class="ti">Harvest Moon</div><div class="ar">Neil Young</div></div>
+            <div class="st g">isrc · exact</div></div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="11" stroke-dasharray="120 60"/></svg>
+            <div class="m"><div class="ti">Silver Springs</div><div class="ar">Fleetwood Mac</div></div>
+            <div class="st b">absent · us</div></div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#3D5638" stroke-width="11" stroke-dasharray="60 200"/></svg>
+            <div class="m"><div class="ti">Pink Moon</div><div class="ar">Nick Drake</div></div>
+            <div class="st d">resolving…</div></div>
+          <div class="row" style="border:none"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#242820" stroke-width="11"/></svg>
+            <div class="m"><div class="ti" style="opacity:.5">Place to Be</div><div class="ar">Nick Drake</div></div>
+            <div class="st d">queued</div></div>
+        </div>
+      </div>
+      <div class="aside">
+        <div class="lbl" style="margin-top:0">This job</div>
+        <div style="font-family:var(--mono);font-size:10.5px;color:var(--cream-300);line-height:1.9">
+          started 14:22:06<br>service apple music<br>storefront us<br>playlist rev 7</div>
+        <div class="lbl">Provider quota</div>
+        <div class="prog"><i style="width:41%;background:linear-gradient(90deg,#C07B45,#DFA063)"></i></div>
+        <div class="pmeta"><span>41% used today</span><span>apple</span></div>
+        <div class="ok" style="margin-top:14px"><div class="h">Safe to leave</div>
+          <div class="b">This runs on the server. Close the tab, switch to your phone — it continues,
+            and it resumes from where it stopped if interrupted.</div></div>
+        <div class="lbl">If it fails</div>
+        <div style="font-size:11.5px;color:var(--cream-300);line-height:1.6">Nothing is written to
+          Apple Music until every record is resolved. A failure leaves your Waxgrove playlist
+          untouched.</div>
+        <div style="margin-top:16px;display:flex;gap:8px">
+          <button class="btn g sm">Pause</button><button class="btn g sm">Cancel</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="cap">Jobs 01 · Running</div>
+  <div class="capsub">The rail chip is the persistent handle — the job is reachable from anywhere and
+  never traps the user on this screen.</div>
+  <div class="win"><b>The unification worth noticing</b>
+    <p>The running job and the export-result view are <i>the same surface in two states</i>. Progress
+    becomes outcome; the live rows become the per-track result rows demanded by F15. Building them as
+    one screen removes a whole second design and matches how the data actually behaves.</p></div>
+</section>
+
+<!-- COMPLETED -->
+<section>
+  <div class="eyebrow">Jobs 02</div>
+  <h2>Finished — and honest about it</h2>
+  <p class="lede">“42 of 45” is not a failure state, it is the normal outcome (§3.5). The completed
+  view names every track that did not transfer, says why, and offers the one action that might fix
+  it — re-resolution (F14).</p>
+
+  <div class="screens">
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Sync complete</div>
+          <div class="sub">porch, july → apple music · 1m 12s</div></div>
+        <div class="body">
+          <div class="phase"><div class="p done">Queued</div><div class="p done">Resolved</div>
+            <div class="p done">Written</div><div class="p done">Done</div></div>
+          <div class="ok"><div class="h">42 of 45 added</div>
+            <div class="b">The playlist is now in your Apple Music library. All 45 remain intact in
+              Waxgrove and in any JSPF export.</div></div>
+          <div class="sect">Did not transfer — 3</div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#A8512A" stroke-width="11" stroke-dasharray="34 96"/></svg>
+            <div class="m"><div class="ti">Silver Springs</div><div class="ar">Fleetwood Mac</div></div>
+            <div class="st b">absent</div></div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#A8512A" stroke-width="11" stroke-dasharray="34 96"/></svg>
+            <div class="m"><div class="ti">The Wind</div><div class="ar">Cat Stevens</div></div>
+            <div class="st b">absent</div></div>
+          <div class="row"><svg class="tick" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="11" stroke-dasharray="120 60"/></svg>
+            <div class="m"><div class="ti">Everywhere</div><div class="ar">Fleetwood Mac</div></div>
+            <div class="st w">region · us</div></div>
+          <div class="why"><div class="h">What “absent” means</div>
+            <div class="b">Apple Music's US storefront has no release carrying this recording's ISRC.
+              A different storefront may — availability is regional, not universal.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Try re-resolving</button>
+          <button class="btn g">Done</button></div>
+      </div></div>
+      <div class="cap">Jobs 02 · Completed, phone</div>
+      <div class="capsub">Every failure named, each with a reason and a storefront. “Absent” is
+      explained in place rather than assumed to be self-evident.</div>
+    </div>
+
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar"><div class="t">Porch, July</div>
+          <div class="sub">ana · shared · revision 9</div></div>
+        <div class="body">
+          <div class="sect" style="margin-top:2px">Sync state</div>
+          <div class="opt" style="margin-bottom:9px">
+            <div class="h">Apple Music <span class="tag w">2 behind</span></div>
+            <div class="d">Synced at revision 7, 3 days ago. The playlist has changed twice since —
+              2 tracks added, 1 removed.</div>
+            <div style="margin-top:9px"><button class="btn sm">Re-sync</button></div>
+          </div>
+          <div class="opt" style="margin-bottom:9px">
+            <div class="h">Spotify <span class="tag">up to date</span></div>
+            <div class="d">Synced at revision 9, 20 minutes ago.</div>
+          </div>
+          <div class="note"><div class="h">Changed on Apple Music</div>
+            <div class="b">Someone edited this playlist inside Apple Music since Waxgrove last wrote
+              it. Re-syncing would overwrite those edits.</div>
+            <div style="margin-top:9px;display:flex;gap:7px">
+              <button class="btn sm">Overwrite</button>
+              <button class="btn g sm">Import theirs</button></div></div>
+          <div class="why"><div class="h">One-way by design</div>
+            <div class="b">Waxgrove pushes to services; it never treats a provider copy as the source
+              of truth. Your revision history here stays authoritative.</div></div>
+        </div>
+        <div class="cta"><button class="btn g">Back to playlist</button></div>
+      </div></div>
+      <div class="cap">Jobs 03 · Sync state (F21)</div>
+      <div class="capsub">“Synced” is not a boolean. Per service, per storefront, with revision drift
+      counted — and divergence surfaced as a choice, never silently clobbered (D10).</div>
+    </div>
+  </div>
+
+  <div class="win" style="border-left-color:var(--copper);background:rgba(192,123,69,.08)">
+    <b style="color:var(--copper-br)">The rule both surfaces share</b>
+    <p>Never let the system's difficulty become the user's confusion. Spotify's quota rules, Apple's
+    regional catalogues and MusicBrainz's rate limit are all real constraints the user did not choose.
+    The interface names them, attributes them, and says what can be done — the same instinct as
+    §3.2's “never silently mismatch”, applied to infrastructure rather than to matching.</p></div>
+</section>
+
+<div class="ftr">
+  Waxgrove — connect wizard &amp; job surface · 2026-08-03<br>
+  F13 · F15 · F21 · F22 · D6 · D10<br>
+  Companion to <code>direction.html</code>, <code>desktop.html</code> and <code>streaming-integration.md</code>
+</div>
+
+</div>
+</body>
+</html>

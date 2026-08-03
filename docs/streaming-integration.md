@@ -273,9 +273,19 @@ Recorded here because each is a design requirement that originates in an API con
 | Dev Mode quota is exhaustible | **Remaining quota** belongs in the UI |
 | BYO credentials (D6) | A real **connect wizard** is required (F13) — per user, not just per operator |
 
-The connect wizard and the job surface are not yet designed in either
-[`design/direction.html`](design/direction.html) (phone) or
-[`design/desktop.html`](design/desktop.html) (desktop).
+Both surfaces are designed in **[`design/connect-and-jobs.html`](design/connect-and-jobs.html)**,
+alongside [`design/direction.html`](design/direction.html) (phone tier) and
+[`design/desktop.html`](design/desktop.html) (desktop tier).
+
+Two design decisions from that work are worth recording here, because they follow directly from
+the constraints above rather than from taste:
+
+- **The running job and the export result are one surface in two states.** Progress becomes
+  outcome; the live rows become the per-track result rows F15 requires. They were never two
+  screens.
+- **Nothing is written to the provider until every record resolves.** A failed or cancelled job
+  therefore leaves both the Waxgrove playlist and the provider account untouched, which is what
+  makes "safe to leave" an honest claim rather than a hopeful one.
 
 ---
 

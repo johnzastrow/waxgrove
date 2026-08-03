@@ -189,6 +189,7 @@ papering over it. Anti-corporate without being shouty. Plain language, no hype.
 | [`docs/streaming-integration.md`](docs/streaming-integration.md) | How Waxgrove exchanges playlists with Spotify and Apple Music — credentials, authorisation, import/export mechanics, storefronts, rate limits, and the user journeys |
 | [`docs/design/direction.html`](docs/design/direction.html) | Visual direction and phone-tier screens |
 | [`docs/design/desktop.html`](docs/design/desktop.html) | Desktop layouts and the tier model |
+| [`docs/design/connect-and-jobs.html`](docs/design/connect-and-jobs.html) | Connect wizard (F13) and the sync job surface (F22) |
 | [`docs/design/logo/`](docs/design/logo/) | Logo files, size guidance, usage notes |
 | [`docs/objectives.md`](docs/objectives.md) | Original project brief and goals |
 | [`docs/naming.md`](docs/naming.md) | Name selection and namespace availability research |
