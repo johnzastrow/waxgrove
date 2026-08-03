@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waxgrove — Design Direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wax-900:#0B0C09; --wax-800:#121410; --wax-700:#1A1D17; --wax-600:#242820;
+  --grove-800:#1B2719; --grove-600:#2C4029; --grove-500:#3D5638; --grove-300:#7A9670;
+  --cream-100:#F4EEDE; --cream-200:#E5DCC5; --cream-300:#CFC3A5;
+  --copper:#C07B45; --copper-br:#DFA063; --ember:#A8512A;
+  --ok:#7A9670; --warn:#C9A227; --bad:#A8512A;
+  --display:"Fraunces",Georgia,serif; --ui:"IBM Plex Sans",sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--wax-900); color:var(--cream-200); font-family:var(--ui);
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(ellipse 80% 50% at 50% -10%, rgba(61,86,56,.22), transparent 70%);
+}
+body::after{ /* grain */
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.32;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 120px}
+section{padding:72px 0;border-top:1px solid var(--wax-600)}
+section:first-of-type{border-top:none}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--copper);margin-bottom:18px}
+h2{font-family:var(--display);font-weight:500;font-size:clamp(26px,3.4vw,40px);color:var(--cream-100);letter-spacing:-.01em;margin-bottom:10px;font-variation-settings:"SOFT" 40,"WONK" 1}
+.lede{max-width:62ch;color:var(--cream-300);font-size:16px}
+
+/* ---------- HERO ---------- */
+.hero{padding:96px 0 64px;display:grid;grid-template-columns:auto 1fr;gap:44px;align-items:center}
+@media(max-width:760px){.hero{grid-template-columns:1fr;gap:28px}}
+.wordmark{font-family:var(--display);font-size:clamp(48px,8vw,92px);font-weight:600;color:var(--cream-100);
+  letter-spacing:-.035em;line-height:.92;font-variation-settings:"SOFT" 60,"WONK" 1}
+.wordmark span{color:var(--grove-300)}
+.tagline{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--copper);margin-top:16px}
+.hero p{margin-top:20px;max-width:52ch;color:var(--cream-300)}
+.markbox{width:180px;height:180px;display:grid;place-items:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rings{animation:spin 48s linear infinite;transform-origin:50% 50%}
+
+/* ---------- PALETTE ---------- */
+.sw{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin-top:28px}
+.chip{border-radius:3px;overflow:hidden;border:1px solid var(--wax-600)}
+.chip i{display:block;height:88px}
+.chip b{display:block;font-family:var(--mono);font-size:11px;padding:9px 10px 2px;color:var(--cream-100);font-weight:500}
+.chip s{display:block;font-family:var(--mono);font-size:10px;padding:0 10px 10px;color:var(--cream-300);text-decoration:none;opacity:.75}
+.warnbox{margin-top:26px;border-left:2px solid var(--ember);background:rgba(168,81,42,.09);padding:16px 20px;border-radius:0 3px 3px 0}
+.warnbox b{color:var(--copper-br);font-weight:600}
+
+/* ---------- TYPE ---------- */
+.spec{border:1px solid var(--wax-600);border-radius:4px;padding:26px;margin-top:16px;background:var(--wax-800)}
+.spec .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--copper);margin-bottom:14px}
+.d1{font-family:var(--display);font-size:44px;font-weight:500;color:var(--cream-100);font-variation-settings:"SOFT" 50,"WONK" 1;line-height:1.1}
+.b1{font-family:var(--ui);font-size:16px;color:var(--cream-200);max-width:60ch}
+.m1{font-family:var(--mono);font-size:13px;color:var(--grove-300)}
+
+/* ---------- RING SYSTEM ---------- */
+.ringrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px;margin-top:28px}
+.ringcard{background:var(--wax-800);border:1px solid var(--wax-600);border-radius:4px;padding:20px;text-align:center}
+.ringcard h4{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream-100);margin:14px 0 5px;font-weight:500}
+.ringcard p{font-size:12.5px;color:var(--cream-300);line-height:1.5}
+
+/* ---------- PHONES ---------- */
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:34px;margin-top:36px}
+.phone{background:var(--wax-800);border:1px solid var(--wax-600);border-radius:26px;padding:11px;box-shadow:0 30px 70px -30px #000}
+.scr{background:var(--wax-900);border-radius:18px;overflow:hidden;height:660px;display:flex;flex-direction:column;position:relative}
+.caption{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--copper);margin:16px 0 0;text-align:center}
+.capsub{font-size:12.5px;color:var(--cream-300);text-align:center;margin-top:5px;line-height:1.5}
+
+.bar{padding:16px 16px 12px;border-bottom:1px solid var(--wax-700);display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.bar .t{font-family:var(--display);font-size:19px;color:var(--cream-100);font-weight:500;font-variation-settings:"SOFT" 40}
+.bar .sub{font-family:var(--mono);font-size:10px;color:var(--cream-300);opacity:.7;letter-spacing:.08em}
+.body{overflow:hidden;flex:1;padding:12px 14px}
+
+.search{background:var(--wax-700);border:1px solid var(--wax-600);border-radius:3px;padding:10px 12px;
+  font-family:var(--mono);font-size:12px;color:var(--cream-300);display:flex;justify-content:space-between}
+.row{display:flex;gap:11px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--wax-700)}
+.row .meta{flex:1;min-width:0}
+.row .ti{font-size:13.5px;color:var(--cream-100);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ar{font-size:11.5px;color:var(--cream-300);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
+.isrc{font-family:var(--mono);font-size:9.5px;color:var(--grove-300);letter-spacing:.05em;opacity:.85}
+.badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:2px;
+  border:1px solid var(--wax-600);color:var(--cream-300);white-space:nowrap}
+.badge.sp{border-color:#2e4a34;color:#8fb08a}
+.badge.ap{border-color:#4a3550;color:#b394bd}
+.badge.mb{border-color:#4a4126;color:#c6b177}
+.badge.jspf{border-color:#3a4650;color:#94aabd}
+.badge.txt{border-color:#4a3a2e;color:var(--copper-br)}
+.sect{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--copper);
+  margin:15px 0 7px;padding-top:5px}
+.cta{position:absolute;left:0;right:0;bottom:0;padding:13px 16px;background:linear-gradient(transparent,var(--wax-900) 28%);
+  display:flex;gap:9px;align-items:center}
+.btn{flex:1;background:var(--grove-600);color:var(--cream-100);border:none;border-radius:3px;padding:13px;
+  font-family:var(--ui);font-size:13.5px;font-weight:600;letter-spacing:.01em;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--wax-600);color:var(--cream-300);flex:0 0 auto;padding:13px 15px}
+.tagchip{display:inline-block;font-size:11px;padding:4px 9px;border-radius:2px;margin:0 5px 5px 0;
+  background:var(--wax-700);border:1px solid var(--wax-600);color:var(--cream-200)}
+.tagchip.priv{border-style:dashed;color:var(--grove-300)}
+.stars{color:var(--copper-br);font-size:15px;letter-spacing:2px}
+.cmt{border-left:2px solid var(--wax-600);padding:8px 0 8px 11px;margin-top:11px}
+.cmt .who{font-family:var(--mono);font-size:9.5px;color:var(--copper);letter-spacing:.08em;text-transform:uppercase}
+.cmt .txt{font-size:12.5px;color:var(--cream-200);margin-top:3px;line-height:1.45}
+.note{background:rgba(168,81,42,.1);border-left:2px solid var(--ember);padding:9px 11px;margin-top:11px;border-radius:0 2px 2px 0}
+.note .h{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--copper-br)}
+.note .b{font-size:11.5px;color:var(--cream-300);margin-top:3px;line-height:1.45}
+.cand{border:1px solid var(--wax-600);border-radius:3px;padding:12px;margin-bottom:10px;background:var(--wax-800)}
+.cand.pick{border-color:var(--grove-500);background:rgba(61,86,56,.14)}
+.cand .hd{display:flex;gap:10px;align-items:center}
+.cand .hd>svg{flex:0 0 auto}
+.cand .meta{flex:1;min-width:0}
+.cand .ti{font-size:13.5px;color:var(--cream-100);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand .ar{font-size:11.5px;color:var(--cream-300);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand .score{flex:0 0 auto;font-family:var(--mono);font-size:13px}
+.cand .why{font-family:var(--mono);font-size:9.5px;color:var(--grove-300);margin-top:8px;letter-spacing:.04em;line-height:1.5}
+.cover{width:100%;aspect-ratio:1;border-radius:3px;background:
+  radial-gradient(circle at 50% 50%, var(--wax-900) 12%, transparent 12.5%),
+  repeating-radial-gradient(circle at 50% 50%, var(--grove-800) 0 3px, var(--wax-800) 3px 6px);
+  display:grid;place-items:center;border:1px solid var(--wax-600);margin-bottom:12px}
+.ftr{font-family:var(--mono);font-size:11px;color:var(--cream-300);opacity:.6;text-align:center;padding-top:60px;line-height:1.9}
+.avoid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:26px}
+.avoid div{border:1px solid var(--wax-600);border-radius:3px;padding:15px 17px;background:var(--wax-800)}
+.avoid b{display:block;color:var(--copper-br);font-size:12.5px;margin-bottom:5px;font-weight:600}
+.avoid p{font-size:12.5px;color:var(--cream-300);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="markbox">
+    <svg width="180" height="180" viewBox="0 0 200 200" aria-label="Waxgrove mark">
+      <g class="rings" fill="none" stroke-linecap="round">
+        <!-- growth rings / grooves, with a deliberate gap = the unwalled garden -->
+        <circle cx="100" cy="100" r="92" stroke="#2C4029" stroke-width="2"
+                stroke-dasharray="410 168" transform="rotate(-58 100 100)"/>
+        <circle cx="100" cy="100" r="78" stroke="#3D5638" stroke-width="2.5"
+                stroke-dasharray="380 110" transform="rotate(-42 100 100)"/>
+        <circle cx="100" cy="100" r="64" stroke="#7A9670" stroke-width="2"
+                stroke-dasharray="330 72" transform="rotate(-30 100 100)"/>
+        <circle cx="100" cy="100" r="50" stroke="#C07B45" stroke-width="2.5"
+                stroke-dasharray="260 55" transform="rotate(-14 100 100)"/>
+        <circle cx="100" cy="100" r="36" stroke="#CFC3A5" stroke-width="1.6"
+                stroke-dasharray="190 38" transform="rotate(6 100 100)"/>
+        <circle cx="100" cy="100" r="22" stroke="#7A9670" stroke-width="1.6"
+                stroke-dasharray="112 26" transform="rotate(28 100 100)"/>
+      </g>
+      <circle cx="100" cy="100" r="6" fill="#0B0C09" stroke="#C07B45" stroke-width="1.4"/>
+    </svg>
+  </div>
+  <div>
+    <div class="wordmark">Wax<span>grove</span></div>
+    <div class="tagline">Sonic Unwalled Garden Library Exchange</div>
+    <p>A record collection that grows in the open. Grooves and growth rings are the same
+       shape — one mark that reads as both, and never closes.</p>
+  </div>
+</div>
+
+<!-- CONCEPT -->
+<section>
+  <div class="eyebrow">01 — The concept</div>
+  <h2>A grove is a garden without a wall</h2>
+  <p class="lede">“Walled garden” is the exact phrase for what this project rejects, so the brand is
+  built on its opposite. <b>Wax</b> is the record, in collector register — crate digging, first
+  pressings, the shelf. <b>Grove</b> is an open stand of trees: grown, not built, and no fence.
+  Every ring in the mark carries a gap. Nothing here closes.</p>
+</section>
+
+<!-- PALETTE -->
+<section>
+  <div class="eyebrow">02 — Colour</div>
+  <h2>Warm analog, not cold neon</h2>
+  <p class="lede">Deep desaturated grove green on wax black, with label-paper cream and a copper
+  accent doing the work that neon does elsewhere.</p>
+  <div class="sw">
+    <div class="chip"><i style="background:#0B0C09"></i><b>Wax 900</b><s>#0B0C09 · ground</s></div>
+    <div class="chip"><i style="background:#1A1D17"></i><b>Wax 700</b><s>#1A1D17 · surface</s></div>
+    <div class="chip"><i style="background:#2C4029"></i><b>Grove 600</b><s>#2C4029 · primary</s></div>
+    <div class="chip"><i style="background:#7A9670"></i><b>Grove 300</b><s>#7A9670 · signal</s></div>
+    <div class="chip"><i style="background:#E5DCC5"></i><b>Cream 200</b><s>#E5DCC5 · label</s></div>
+    <div class="chip"><i style="background:#C07B45"></i><b>Copper</b><s>#C07B45 · accent</s></div>
+  </div>
+  <div class="warnbox">
+    <b>Hard constraint — never Spotify green (#1DB954).</b>
+    <p style="font-size:14px;color:var(--cream-300);margin-top:6px">A vivid green music app reads as a
+    Spotify clone, which is precisely the wrong signal for a project defined by <i>not</i> being a walled
+    garden. The primary green here is deliberately dark, desaturated and closer to moss than to lime —
+    copper carries the energy instead. Also excluded: Apple Music’s pink-red gradient, and neon-on-black
+    streaming aesthetics generally.</p>
+  </div>
+</section>
+
+<!-- TYPE -->
+<section>
+  <div class="eyebrow">03 — Typography</div>
+  <h2>Letterpress warmth over cold geometry</h2>
+  <p class="lede">Mid-century record-label print is the reference. A wonky optical serif for display,
+  a humanist sans for interface, and mono for the catalogue layer — ISRCs, MBIDs, confidence scores.</p>
+  <div class="spec">
+    <div class="lbl">Fraunces · display · wordmarks, titles</div>
+    <div class="d1">Crate digging, without the crates</div>
+  </div>
+  <div class="spec">
+    <div class="lbl">IBM Plex Sans · interface · body</div>
+    <div class="b1">Ana syncs a playlist up. Ben sees it without needing any connector at all, then
+    pulls it down into Apple Music to actually play it.</div>
+  </div>
+  <div class="spec">
+    <div class="lbl">IBM Plex Mono · catalogue · identifiers, confidence</div>
+    <div class="m1">ISRC GBAYE0601498 · MBID b1a9c0e8-… · matched ISRC_EXACT · conf 1.00</div>
+  </div>
+</section>
+
+<!-- RING SYSTEM -->
+<section>
+  <div class="eyebrow">04 — The ring system</div>
+  <h2>The logo is the confidence indicator</h2>
+  <p class="lede">This is the idea worth remembering. The mark isn’t decoration bolted onto the product —
+  it <i>is</i> the product’s core mechanic. Waxgrove’s hardest problem is match confidence, so the rings
+  encode it: complete grooves mean a certain match, broken rings mean the record needs your judgment.
+  The brand appears on every row of the app, doing real work.</p>
+  <div class="ringrow">
+    <div class="ringcard">
+      <svg width="72" height="72" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="4"/>
+        <circle cx="50" cy="50" r="30" stroke="#7A9670" stroke-width="4"/>
+        <circle cx="50" cy="50" r="18" stroke="#7A9670" stroke-width="4"/>
+        <circle cx="50" cy="50" r="4" fill="#7A9670"/>
+      </svg>
+      <h4>Exact</h4><p>ISRC or MBID matched. Unbroken grooves. Automatic — no human needed.</p>
+    </div>
+    <div class="ringcard">
+      <svg width="72" height="72" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="4" stroke-dasharray="230 34" transform="rotate(-40 50 50)"/>
+        <circle cx="50" cy="50" r="30" stroke="#7A9670" stroke-width="4" stroke-dasharray="160 28" transform="rotate(20 50 50)"/>
+        <circle cx="50" cy="50" r="18" stroke="#4a5c46" stroke-width="4" stroke-dasharray="80 34"/>
+        <circle cx="50" cy="50" r="4" fill="#7A9670"/>
+      </svg>
+      <h4>Strong</h4><p>MBID Mapper, high score. Small gaps. Accepted, but auditable later.</p>
+    </div>
+    <div class="ringcard">
+      <svg width="72" height="72" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="4" stroke-dasharray="120 60" transform="rotate(-20 50 50)"/>
+        <circle cx="50" cy="50" r="30" stroke="#C9A227" stroke-width="4" stroke-dasharray="70 50" transform="rotate(40 50 50)"/>
+        <circle cx="50" cy="50" r="18" stroke="#5c5230" stroke-width="4" stroke-dasharray="34 40"/>
+        <circle cx="50" cy="50" r="4" fill="#C9A227"/>
+      </svg>
+      <h4>Uncertain</h4><p>Fuzzy match below threshold. Rings fracture. Sent to disambiguation.</p>
+    </div>
+    <div class="ringcard">
+      <svg width="72" height="72" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="42" stroke="#A8512A" stroke-width="4" stroke-dasharray="34 96" transform="rotate(-10 50 50)"/>
+        <circle cx="50" cy="50" r="30" stroke="#5c3a2a" stroke-width="4" stroke-dasharray="22 70"/>
+        <circle cx="50" cy="50" r="4" fill="#A8512A"/>
+      </svg>
+      <h4>Unresolved</h4><p>Raw text only. Kept in the crate — never silently dropped.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENS -->
+<section>
+  <div class="eyebrow">05 — Screens</div>
+  <h2>Mobile-first, four core surfaces</h2>
+  <p class="lede">Designed at phone width first. Cream “label” cards sit on wax black; the catalogue
+  layer stays in mono so identifiers never masquerade as prose.</p>
+  <div class="warnbox" style="border-left-color:var(--grove-500);background:rgba(61,86,56,.10);margin-bottom:6px">
+    <b style="color:var(--grove-300)">Mobile-first, not mobile-only.</b>
+    <p style="font-size:14px;color:var(--cream-300);margin-top:6px">The phone sets the design order,
+    but desktop is a first-class target — the PWA installs there too, and several tasks are genuinely
+    better with room: bulk crate curation, working through a long import queue, reordering a large
+    playlist. <b>These four screens are the phone tier only.</b> Desktop layouts still need designing,
+    and a stretched phone column is not a desktop design — the crate in particular wants a two-pane
+    treatment (sources left, staged items right) that has no phone equivalent.</p>
+  </div>
+
+  <div class="screens">
+
+    <!-- 1. CATALOG SEARCH -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar">
+          <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#3D5638" stroke-width="6" stroke-dasharray="220 44"/>
+            <circle cx="50" cy="50" r="26" stroke="#C07B45" stroke-width="6" stroke-dasharray="130 30"/>
+            <circle cx="50" cy="50" r="5" fill="#C07B45"/></svg>
+          <div><div class="t">The grove</div>
+          <div class="sub">1,284 records · 6 members</div></div>
+        </div>
+        <div class="body">
+          <div class="search"><span>fleetwood mac — dreams</span><span style="color:var(--copper)">⌕</span></div>
+          <div class="sect">In the catalogue</div>
+          <div class="row">
+            <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="24" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Dreams</div><div class="ar">Fleetwood Mac · Rumours</div>
+              <div class="isrc">ISRC USWB10002435</div></div>
+            <span class="badge sp">spotify</span>
+          </div>
+          <div class="row">
+            <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="24" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Dreams — 2004 Remaster</div><div class="ar">Fleetwood Mac</div>
+              <div class="isrc">ISRC USWB10403821</div></div>
+            <span class="badge ap">apple</span>
+          </div>
+          <div class="sect">Elsewhere — MusicBrainz</div>
+          <div class="row">
+            <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7" stroke-dasharray="230 34"/><circle cx="50" cy="50" r="24" stroke="#4a5c46" stroke-width="7" stroke-dasharray="110 30"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Dreams (live at Wembley)</div><div class="ar">Fleetwood Mac · 1988</div>
+              <div class="isrc">MBID 3f9a…c21b</div></div>
+            <span class="badge mb">import</span>
+          </div>
+          <div class="row" style="border:none">
+            <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7" stroke-dasharray="230 34"/><circle cx="50" cy="50" r="24" stroke="#4a5c46" stroke-width="7" stroke-dasharray="110 30"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Dreams</div><div class="ar">The Cranberries · No Need to Argue</div>
+              <div class="isrc">MBID a71c…4e08</div></div>
+            <span class="badge mb">import</span>
+          </div>
+        </div>
+        <div class="cta"><button class="btn">Add 2 to crate</button>
+          <button class="btn ghost">⌄</button></div>
+      </div></div>
+      <div class="caption">01 · Catalogue search</div>
+      <div class="capsub">One shared catalogue. Local records first, remote sources below —
+      the divide is explicit so you always know what you already own.</div>
+    </div>
+
+    <!-- 2. THE CRATE -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar">
+          <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#C07B45" stroke-width="6" stroke-dasharray="200 60"/>
+            <circle cx="50" cy="50" r="24" stroke="#3D5638" stroke-width="6"/>
+            <circle cx="50" cy="50" r="5" fill="#C07B45"/></svg>
+          <div><div class="t">Your crate</div>
+          <div class="sub">14 records · 4 sources · 2 need you</div></div>
+        </div>
+        <div class="body">
+          <div class="sect">From Spotify import</div>
+          <div class="row">
+            <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="24" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Everywhere</div><div class="ar">Fleetwood Mac</div></div>
+            <span class="badge sp">isrc</span>
+          </div>
+          <div class="sect">Pasted text · 10 lines</div>
+          <div class="row">
+            <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7" stroke-dasharray="230 34"/><circle cx="50" cy="50" r="24" stroke="#4a5c46" stroke-width="7" stroke-dasharray="110 30"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Harvest Moon</div><div class="ar">Neil Young</div>
+              <div class="isrc">mapper · conf 0.94</div></div>
+            <span class="badge txt">text</span>
+          </div>
+          <div class="row">
+            <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="7" stroke-dasharray="120 60"/><circle cx="50" cy="50" r="24" stroke="#5c5230" stroke-width="7" stroke-dasharray="60 44"/><circle cx="50" cy="50" r="5" fill="#C9A227"/></svg>
+            <div class="meta"><div class="ti">the wind — cat stevens?</div><div class="ar" style="color:var(--warn)">3 candidates · conf 0.61</div></div>
+            <span class="badge txt">text</span>
+          </div>
+          <div class="sect">From Ana’s “Porch, July”</div>
+          <div class="row">
+            <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="24" stroke="#7A9670" stroke-width="7"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+            <div class="meta"><div class="ti">Pink Moon</div><div class="ar">Nick Drake</div></div>
+            <span class="badge jspf">shared</span>
+          </div>
+          <div class="note"><div class="h">2 unresolved</div>
+            <div class="b">Kept as raw text until you decide. Nothing is dropped silently.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Commit 12 to playlist</button>
+          <button class="btn ghost">⌄</button></div>
+      </div></div>
+      <div class="caption">02 · The crate</div>
+      <div class="capsub">Four sources, one commit. Items group by where they came from, and
+      the ring tells you what still needs judgment before anything becomes a playlist.</div>
+    </div>
+
+    <!-- 3. PLAYLIST -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar">
+          <div><div class="t">Porch, July</div>
+          <div class="sub">Ana · shared · rev 7</div></div>
+        </div>
+        <div class="body" style="overflow:hidden">
+          <div class="cover" style="height:118px;aspect-ratio:auto">
+            <svg width="86" height="86" viewBox="0 0 100 100" fill="none">
+              <circle cx="50" cy="50" r="44" stroke="#3D5638" stroke-width="2.5" stroke-dasharray="200 44"/>
+              <circle cx="50" cy="50" r="34" stroke="#7A9670" stroke-width="2.5" stroke-dasharray="150 36"/>
+              <circle cx="50" cy="50" r="24" stroke="#C07B45" stroke-width="2.5" stroke-dasharray="100 28"/>
+              <circle cx="50" cy="50" r="14" stroke="#CFC3A5" stroke-width="2" stroke-dasharray="56 20"/>
+              <circle cx="50" cy="50" r="4" fill="#C07B45"/></svg>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div class="isrc" style="margin-bottom:3px">YOUR RATING</div>
+              <div class="stars">★★★★☆</div></div>
+            <div style="text-align:right"><div class="isrc" style="margin-bottom:3px">GROVE AVG</div>
+              <div class="stars" style="color:var(--grove-300)">4.3 <span style="font-size:11px">· 4 raters</span></div></div>
+          </div>
+          <div class="sect">Tags</div>
+          <div>
+            <span class="tagchip">summer</span><span class="tagchip">acoustic</span>
+            <span class="tagchip">ana’s picks</span><span class="tagchip priv">for the drive ⌾</span>
+          </div>
+          <div class="note"><div class="h">Exported to Apple Music</div>
+            <div class="b">42 of 45 transferred. 3 unavailable — tap to see which.</div></div>
+          <div class="sect">Comments</div>
+          <div class="cmt"><div class="who">Ben · 2 days ago</div>
+            <div class="txt">Track 9 is the one I was trying to describe on the phone.</div></div>
+        </div>
+        <div class="cta"><button class="btn">Sync to Apple Music</button>
+          <button class="btn ghost">⌄</button></div>
+      </div></div>
+      <div class="caption">03 · Playlist</div>
+      <div class="capsub">Ana owns it; Ben rates, tags and comments without touching her copy.
+      Dashed chips are private tags. Partial export is stated, never hidden.</div>
+    </div>
+
+    <!-- 4. DISAMBIGUATION -->
+    <div>
+      <div class="phone"><div class="scr">
+        <div class="bar">
+          <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="6" stroke-dasharray="120 60"/>
+            <circle cx="50" cy="50" r="24" stroke="#5c5230" stroke-width="6" stroke-dasharray="60 44"/>
+            <circle cx="50" cy="50" r="5" fill="#C9A227"/></svg>
+          <div><div class="t">Which one?</div>
+          <div class="sub">“the wind — cat stevens”</div></div>
+        </div>
+        <div class="body">
+          <div class="isrc" style="margin-bottom:12px;line-height:1.6">Below threshold — Waxgrove will not guess.</div>
+
+          <div class="cand pick">
+            <div class="hd">
+              <svg width="28" height="28" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#7A9670" stroke-width="7" stroke-dasharray="230 34"/><circle cx="50" cy="50" r="24" stroke="#4a5c46" stroke-width="7" stroke-dasharray="110 30"/><circle cx="50" cy="50" r="5" fill="#7A9670"/></svg>
+              <div class="meta"><div class="ti">The Wind</div><div class="ar">Cat Stevens · Teaser and the Firecat</div></div>
+              <div class="score" style="color:var(--grove-300)">0.88</div>
+            </div>
+            <div class="why">MBID MAPPER · artist exact · title exact<br>duration 1:42 · release 1971</div>
+          </div>
+
+          <div class="cand">
+            <div class="hd">
+              <svg width="28" height="28" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#C9A227" stroke-width="7" stroke-dasharray="120 60"/><circle cx="50" cy="50" r="24" stroke="#5c5230" stroke-width="7" stroke-dasharray="60 44"/><circle cx="50" cy="50" r="5" fill="#C9A227"/></svg>
+              <div class="meta"><div class="ti">The Wind — Remastered 2000</div><div class="ar">Cat Stevens</div></div>
+              <div class="score" style="color:var(--warn)">0.61</div>
+            </div>
+            <div class="why">FUZZY · title +suffix · duration 1:44</div>
+          </div>
+
+          <div class="cand">
+            <div class="hd">
+              <svg width="28" height="28" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#A8512A" stroke-width="7" stroke-dasharray="34 96"/><circle cx="50" cy="50" r="5" fill="#A8512A"/></svg>
+              <div class="meta"><div class="ti">The Wind</div><div class="ar">Yusuf / Cat Stevens · live 2009</div></div>
+              <div class="score" style="color:var(--bad)">0.34</div>
+            </div>
+            <div class="why">FUZZY · artist alias · duration 2:58 — outside ±3s</div>
+          </div>
+        </div>
+        <div class="cta"><button class="btn">Use this match</button>
+          <button class="btn ghost">Keep as text</button></div>
+      </div></div>
+      <div class="caption">04 · Disambiguation</div>
+      <div class="capsub">Every match shows its method and score, so a bad call is auditable
+      and re-resolvable. “Keep as text” is always available — never guess.</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- AVOID -->
+<section>
+  <div class="eyebrow">06 — Guard rails</div>
+  <h2>What this must never look like</h2>
+  <div class="avoid">
+    <div><b>Spotify green</b><p>#1DB954 and anything near it. The single fastest way to make this
+      read as a clone of the thing it exists to escape.</p></div>
+    <div><b>Streaming neon</b><p>No gradients, glassmorphism, or dark-mode purple glow. This is a
+      printed object, not a dashboard.</p></div>
+    <div><b>Music clichés</b><p>No music notes, equaliser bars, soundwave squiggles, headphones.
+      The rings already carry the meaning.</p></div>
+    <div><b>SaaS default</b><p>No thin geometric sans, no generic card grid, nothing that reads
+      “AI startup”. Warmth and weight over sleekness.</p></div>
+  </div>
+</section>
+
+<div class="ftr">
+  Waxgrove — design direction · 2026-08-03<br>
+  Type: Fraunces · IBM Plex Sans · IBM Plex Mono<br>
+  Companion to <code>docs/requirements.md</code> §3 and the brand section of <code>README.md</code>
+</div>
+
+</div>
+</body>
+</html>

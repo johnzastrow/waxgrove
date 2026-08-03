@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256" role="img" aria-labelledby="t">
+<title id="t">Waxgrove</title>
+<desc>Concentric broken rings reading as both record grooves and tree growth rings.</desc>
+<rect width="100" height="100" rx="22" fill="#0B0C09"/>
+<g fill="none" stroke-linecap="round" transform="translate(50 50) scale(.78) translate(-50 -50)">
+  <circle cx="50" cy="50" r="42" stroke="#3D5638" stroke-width="6.5" stroke-dasharray="227.24 36.65" transform="rotate(-30 50 50)"/>
+  <circle cx="50" cy="50" r="27" stroke="#7A9670" stroke-width="6.5" stroke-dasharray="146.08 23.56" transform="rotate(20 50 50)"/>
+  <circle cx="50" cy="50" r="12" stroke="#C07B45" stroke-width="5.5" stroke-dasharray="64.93 10.47" transform="rotate(70 50 50)"/>
+</g>
+<circle cx="50" cy="50" r="3.3" fill="#C07B45"/>
+</svg>
