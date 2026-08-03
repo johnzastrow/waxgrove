@@ -1,7 +1,7 @@
 # Waxgrove — Requirements & Architecture
 
 **Date:** 2026-08-03
-**Status:** Requirements draft. All decisions in §8 resolved (D1–D10). The goals added to
+**Status:** Requirements draft. All decisions in §8 resolved (D1–D11). The goals added to
 `objectives.md` are reconciled into this document as of 2026-08-03. No code written yet.
 **Inputs:** `objectives.md` (objectives + goals), `naming.md` (name — confirmed Waxgrove)
 
@@ -13,7 +13,7 @@ A mobile-first, self-hostable app for sharing songs and playlists between friend
 different streaming services. It stores **metadata only** — never audio files — and acts as a
 neutral meeting point between walled gardens.
 
-**Objectives (from `waxgroveapp.md`):** open source · self-hostable · low resources ·
+**Objectives (from [`objectives.md`](objectives.md)):** open source · self-hostable · low resources ·
 standards-based where standards exist.
 
 ### Scope correction
