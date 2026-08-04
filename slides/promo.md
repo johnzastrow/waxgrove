@@ -5,6 +5,10 @@ info: Sonic Unwalled Garden Library Exchange — share playlists across streamin
 class: text-left
 transition: fade
 mdc: true
+# Static hosting has no URL rewrites: GitHub Pages serves its own 404 for
+# unknown paths and only honours a 404.html at the SITE root, not a nested one.
+# Hash routing keeps deep links working without any server rewrite.
+routerMode: hash
 fonts:
   provider: none
 ---
