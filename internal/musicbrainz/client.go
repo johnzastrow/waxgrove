@@ -26,9 +26,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Default endpoints. Held as client fields rather than constants so the
+// network-facing methods are testable against a stub instead of only the
+// parsing helpers being reachable.
 const (
-	apiBase    = "https://musicbrainz.org/ws/2"
-	mapperBase = "https://labs.api.listenbrainz.org"
+	defaultAPIBase    = "https://musicbrainz.org/ws/2"
+	defaultMapperBase = "https://labs.api.listenbrainz.org"
 )
 
 // Client is a rate-limited MusicBrainz client. Safe for concurrent use.
@@ -37,7 +40,15 @@ type Client struct {
 	limiter *rate.Limiter
 	// userAgent is required by MusicBrainz; requests without a meaningful one
 	// are blocked, and rightly so.
-	userAgent string
+	userAgent  string
+	apiBase    string
+	mapperBase string
+}
+
+// WithBaseURLs points the client at alternative endpoints — a stub in tests, or
+// a self-hosted MusicBrainz mirror.
+func WithBaseURLs(api, mapper string) Option {
+	return func(c *Client) { c.apiBase, c.mapperBase = api, mapper }
 }
 
 // Option configures a Client.
@@ -56,9 +67,11 @@ func WithBurst(b int) Option {
 // can identify and contact the operator if an instance misbehaves.
 func New(contact, version string, opts ...Option) *Client {
 	c := &Client{
-		http:      &http.Client{Timeout: 20 * time.Second},
-		limiter:   rate.NewLimiter(rate.Limit(1), 3),
-		userAgent: fmt.Sprintf("Waxgrove/%s ( %s )", version, contact),
+		http:       &http.Client{Timeout: 20 * time.Second},
+		limiter:    rate.NewLimiter(rate.Limit(1), 3),
+		userAgent:  fmt.Sprintf("Waxgrove/%s ( %s )", version, contact),
+		apiBase:    defaultAPIBase,
+		mapperBase: defaultMapperBase,
 	}
 	for _, o := range opts {
 		o(c)
@@ -148,7 +161,7 @@ func (c *Client) LookupISRC(ctx context.Context, isrc string) (domain.Candidate,
 	var out struct {
 		Recordings []recordingResponse `json:"recordings"`
 	}
-	u := fmt.Sprintf("%s/isrc/%s?inc=artist-credits+releases&fmt=json", apiBase, url.PathEscape(isrc))
+	u := fmt.Sprintf("%s/isrc/%s?inc=artist-credits+releases&fmt=json", c.apiBase, url.PathEscape(isrc))
 	if err := c.get(ctx, u, &out); err != nil {
 		return domain.Candidate{}, err
 	}
@@ -163,7 +176,7 @@ func (c *Client) LookupISRC(ctx context.Context, isrc string) (domain.Candidate,
 // LookupRecording fetches one recording by MBID, with its full ISRC set.
 func (c *Client) LookupRecording(ctx context.Context, mbid string) (domain.Candidate, error) {
 	var out recordingResponse
-	u := fmt.Sprintf("%s/recording/%s?inc=artist-credits+releases+isrcs&fmt=json", apiBase, url.PathEscape(mbid))
+	u := fmt.Sprintf("%s/recording/%s?inc=artist-credits+releases+isrcs&fmt=json", c.apiBase, url.PathEscape(mbid))
 	if err := c.get(ctx, u, &out); err != nil {
 		return domain.Candidate{}, err
 	}
@@ -178,7 +191,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]domain.
 	var out struct {
 		Recordings []recordingResponse `json:"recordings"`
 	}
-	u := fmt.Sprintf("%s/recording/?query=%s&limit=%d&fmt=json", apiBase, url.QueryEscape(query), limit)
+	u := fmt.Sprintf("%s/recording/?query=%s&limit=%d&fmt=json", c.apiBase, url.QueryEscape(query), limit)
 	if err := c.get(ctx, u, &out); err != nil {
 		return nil, err
 	}
@@ -189,16 +202,13 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]domain.
 	return cands, nil
 }
 
-// apiBaseForTest lets tests point the release parser at a stub server.
-var apiBaseForTest = apiBase
-
 // ReleaseTracks fetches an entire release in ONE request, with every ISRC.
 //
 // This is what makes album-shaped fetching cheap (§3.6) and feeds D11's
 // ambient tier: the surplus tracks are cached so later resolutions are free.
 func (c *Client) ReleaseTracks(ctx context.Context, releaseMBID string) ([]domain.Candidate, error) {
 	u := fmt.Sprintf("%s/release/%s?inc=recordings+artist-credits+isrcs&fmt=json",
-		apiBaseForTest, url.PathEscape(releaseMBID))
+		c.apiBase, url.PathEscape(releaseMBID))
 	return c.releaseTracksAt(ctx, u)
 }
 
@@ -245,7 +255,7 @@ func (c *Client) MapRecording(ctx context.Context, artist, title string) (domain
 		ArtistName    string `json:"artist_credit_name"`
 	}
 	u := fmt.Sprintf("%s/mbid-mapping/json?artist_credit_name=%s&recording_name=%s",
-		mapperBase, url.QueryEscape(artist), url.QueryEscape(title))
+		c.mapperBase, url.QueryEscape(artist), url.QueryEscape(title))
 	if err := c.get(ctx, u, &out); err != nil {
 		return domain.Candidate{}, err
 	}

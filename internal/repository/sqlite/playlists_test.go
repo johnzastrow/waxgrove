@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/johnzastrow/waxgrove/internal/domain"
@@ -181,5 +182,145 @@ func TestRemoveAtClosesTheGap(t *testing.T) {
 	}
 	if got.Tracks[1].Record.Title != "C" {
 		t.Errorf("position 1 is %q, want C", got.Tracks[1].Record.Title)
+	}
+}
+
+func TestReorderRewritesPositionsAndBumpsRevision(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+
+	var ids []string
+	for _, tr := range [][3]string{
+		{"A", "X", "AA10000000001"}, {"B", "X", "AA10000000002"}, {"C", "X", "AA10000000003"},
+	} {
+		ids = append(ids, seedRecord(t, s, tr[0], tr[1], tr[2]).ID)
+	}
+	p, _ := s.Playlists().Create(ctx, "u1", "L", "")
+	if _, err := s.Playlists().AddRecords(ctx, p.ID, "u1", ids); err != nil {
+		t.Fatal(err)
+	}
+
+	reversed := []string{ids[2], ids[1], ids[0]}
+	got, err := s.Playlists().Reorder(ctx, p.ID, "u1", reversed)
+	if err != nil {
+		t.Fatalf("reorder: %v", err)
+	}
+	if got.Tracks[0].Record.Title != "C" || got.Tracks[2].Record.Title != "A" {
+		t.Errorf("order not applied: %s,%s,%s",
+			got.Tracks[0].Record.Title, got.Tracks[1].Record.Title, got.Tracks[2].Record.Title)
+	}
+	if got.CurrentRev != 3 { // create, add, reorder
+		t.Errorf("revision = %d, want 3", got.CurrentRev)
+	}
+}
+
+func TestRenameIsAContentRevision(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+	p, _ := s.Playlists().Create(ctx, "u1", "Old", "")
+
+	got, err := s.Playlists().Rename(ctx, p.ID, "u1", "New")
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if got.Title != "New" {
+		t.Errorf("title = %q", got.Title)
+	}
+	hist, _ := s.Playlists().History(ctx, p.ID)
+	if hist[0].Op != domain.OpRename {
+		t.Errorf("newest op = %q, want rename", hist[0].Op)
+	}
+}
+
+func TestHistoryIsNewestFirst(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+	p, _ := s.Playlists().Create(ctx, "u1", "L", "")
+	if _, err := s.Playlists().Rename(ctx, p.ID, "u1", "L2"); err != nil {
+		t.Fatal(err)
+	}
+	hist, _ := s.Playlists().History(ctx, p.ID)
+	if len(hist) != 2 || hist[0].Rev <= hist[1].Rev {
+		t.Errorf("history not newest-first: %+v", hist)
+	}
+}
+
+func TestDeleteCascadesRevisionsAndTracks(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+	rec := seedRecord(t, s, "A", "X", "AA20000000001")
+	p, _ := s.Playlists().Create(ctx, "u1", "L", "")
+	if _, err := s.Playlists().AddRecords(ctx, p.ID, "u1", []string{rec.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Playlists().Delete(ctx, p.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	for _, q := range []string{
+		`SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = ?`,
+		`SELECT COUNT(*) FROM playlist_revisions WHERE playlist_id = ?`,
+	} {
+		var n int
+		if err := s.Reader().QueryRowContext(ctx, q, p.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("rows survived playlist delete: %s -> %d", q, n)
+		}
+	}
+	// The record itself is shared and must NOT be removed (§3.0).
+	if _, err := s.Records().Get(ctx, rec.ID); err != nil {
+		t.Errorf("deleting a playlist removed a shared catalogue record: %v", err)
+	}
+}
+
+func TestMutatingAMissingPlaylistIsNotFound(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+	for name, err := range map[string]error{
+		"add":    firstErr(s.Playlists().AddRecords(ctx, "nope", "u1", []string{"x"})),
+		"remove": firstErr(s.Playlists().RemoveAt(ctx, "nope", "u1", 0)),
+		"rename": firstErr(s.Playlists().Rename(ctx, "nope", "u1", "t")),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s on missing playlist = %v, want ErrNotFound", name, err)
+		}
+	}
+	if err := s.Playlists().Delete(ctx, "nope"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("delete missing = %v", err)
+	}
+}
+
+func firstErr(_ *domain.Playlist, err error) error { return err }
+
+func TestGetMissingRecordIsNotFound(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Records().Get(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestListOwnedOnlyReturnsOwnPlaylists(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seedUser(t, s, "u1")
+	seedUser(t, s, "u2")
+	if _, err := s.Playlists().Create(ctx, "u1", "mine", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Playlists().Create(ctx, "u2", "theirs", ""); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := s.Playlists().ListOwned(ctx, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mine) != 1 || mine[0].Title != "mine" {
+		t.Errorf("ListOwned returned %d playlists: %+v", len(mine), mine)
 	}
 }

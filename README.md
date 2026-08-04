@@ -211,8 +211,23 @@ make run
 curl localhost:8080/health
 ```
 
-`WAXGROVE_SECRET_KEY` is a base64 AES-256 key used to encrypt provider tokens at rest. There is
-no default: generating one silently would encrypt tokens under a key that vanishes on restart.
+### Configuration
+
+| Variable | Default | Notes |
+|---|---|---|
+| `WAXGROVE_SECRET_KEY` | **required** | Base64 AES-256 key encrypting provider tokens at rest. No default: generating one silently would encrypt tokens under a key that vanishes on restart. |
+| `WAXGROVE_METADATA_SOURCE` | `musicbrainz` | Or `none` to run with no remote catalogue at all (N6) — local search and JSPF still work. |
+| `WAXGROVE_CONTACT` | required unless `none` | An email or URL. MusicBrainz needs a way to reach an operator whose instance misbehaves, so it is refused rather than defaulted. |
+| `WAXGROVE_ADDR` | `127.0.0.1:8080` | Loopback by default; put a reverse proxy in front. |
+| `WAXGROVE_DB` | `waxgrove.db` | SQLite path. |
+| `WAXGROVE_ENV` | `development` | `production` additionally requires an https `WAXGROVE_BASE_URL` and refuses open registration. |
+| `WAXGROVE_INVITE_ONLY` | `true` | §6: a friends app, not a public service. |
+
+Running with **no metadata source at all** is a supported configuration, not a degraded one:
+
+```bash
+WAXGROVE_METADATA_SOURCE=none make run
+```
 
 ## License
 

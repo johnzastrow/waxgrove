@@ -48,6 +48,22 @@ func genkey() error {
 	return nil
 }
 
+// remoteOrNil avoids handing the resolver a non-nil interface wrapping a nil
+// pointer, which would look enabled and then panic on first use.
+func remoteOrNil(c *musicbrainz.Client) resolve.Remote {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
+func searchOrNil(c *musicbrainz.Client) httpapi.RemoteSearch {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
 func run() error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -73,11 +89,20 @@ func run() error {
 	defer func() { _ = store.Close() }()
 	slog.Info("database ready", "path", cfg.DatabaseURL)
 
-	mb := musicbrainz.New(cfg.BaseURL, httpapi.Version)
+	// N6: with no metadata source the ladder runs local-only and every
+	// remote-optional path is exercised in production, not just in tests.
+	var remote *musicbrainz.Client
+	if cfg.RemoteEnabled() {
+		remote = musicbrainz.New(cfg.Contact, httpapi.Version)
+		slog.Info("metadata source enabled", "source", cfg.MetadataSource)
+	} else {
+		slog.Info("running with no metadata source; local catalogue and JSPF only")
+	}
+
 	api := &httpapi.API{
 		Store:    store,
-		Resolver: resolve.New(store.Records(), mb),
-		Remote:   mb,
+		Resolver: resolve.New(store.Records(), remoteOrNil(remote)),
+		Remote:   searchOrNil(remote),
 		Env:      cfg.Environment,
 		Secure:   cfg.Environment == "production",
 	}
