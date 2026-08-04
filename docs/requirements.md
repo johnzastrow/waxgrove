@@ -493,6 +493,11 @@ possible, and the six interface consequences that follow from these constraints.
 - **F23** — **Mirror across your own services** in one action, for the minority of users holding
   both Spotify and Apple Music (goal 1). Composes F6 → resolution → F7 over the canonical layer;
   not new architecture, but it should not require a manual import-then-export.
+- **F25** — **Export all of a user's personal data** in machine-readable form — account,
+  playlists (JSPF), annotations, crate (GDPR Art. 15/20, §6.1).
+- **F26** — **Erase a user account**: delete credentials, sessions, private tags and activity;
+  **anonymise** revision and comment attribution rather than destroying shared history; leave
+  contributed canonical records intact (GDPR Art. 17, §6.1).
 - **F24** — **Ambient records are promoted to curated on first deliberate use** (D11) — when a
   user adds one to a crate or playlist it gains provenance and enters F4 search. Until then it
   exists only to make resolution instant.
@@ -516,7 +521,7 @@ possible, and the six interface consequences that follow from these constraints.
 | N1 | **Low resources** | Must run comfortably on a Raspberry Pi or a $5 VPS. Rules out a JVM-scale runtime and a multi-container default deployment. |
 | N2 | **Self-hostable by a non-expert** | Single artifact, zero external service dependencies to boot. `docker run` or one binary. |
 | N3 | **Mobile-first, not mobile-only** | The phone is the primary interaction and sets the design order — touch targets and small screens are solved first. **Desktop is a first-class target, not a fallback**: the PWA installs and runs on desktop too, and some tasks are genuinely better there (bulk crate curation, disambiguating a long import, editing a large playlist). Layouts must scale up deliberately — a stretched phone column is not a desktop design. |
-| N4 | **Open source** | License decision pending. AGPL-3.0 is the usual choice for self-hosted social software; MIT if wide adoption matters more. |
+| N4 | **Open source** | **MIT** (decided 2026-08-03). Maximum reuse; permits closed forks, accepted deliberately. |
 | N5 | **Standards-based** | ISRC, MusicBrainz MBID, JSPF/XSPF, OAuth 2.0 + PKCE, OIDC where auth is delegated. |
 | N6 | **Degrades to zero connectors** | Full local + JSPF functionality with no provider linked. |
 
@@ -538,7 +543,41 @@ access to a user's real music library.
 | **Authorization** | Checked on every request, including playlist, share, and annotation access. A shared playlist link must not be a bearer of unlimited authority. **Private tags are readable only by their author** — enforced server-side, never by client filtering. |
 | **Data classification** | Song metadata and the shared catalog: **public**. Listening/sharing activity, private tags, provider tokens, and per-user Client Secrets: **confidential**. |
 | **Rate limiting** | On the app's own API, and a client-side limiter respecting MusicBrainz's 1 req/sec and provider quotas. |
-| **Compliance** | Assumed none. To confirm. |
+| **Compliance** | **GDPR applies** — confirmed 2026-08-03. A friends instance spanning the EU/UK processes personal data: accounts, sharing activity, annotations and IP-bearing security logs. See below. |
+
+### 6.1 GDPR — what it changes, confirmed 2026-08-03
+
+Song metadata is **not** personal data, so the shared catalog (§3.0) is largely out of scope.
+What *is* personal: accounts, provider credentials, activity, annotations, and the **actor
+attribution on playlist revisions** (F17).
+
+| Right | Consequence for Waxgrove |
+|---|---|
+| **Access / portability** (Art. 15, 20) | A user can export everything of theirs in a machine-readable form — account, playlists, annotations, crate. Playlists already serialize to JSPF (F8), so most of this exists. **F25.** |
+| **Erasure** (Art. 17) | A user can delete their account. This collides with the append-only revision history, resolved below. **F26.** |
+| **Data minimisation** (Art. 5) | Security logs record source IP (§6). Give them a bounded retention rather than keeping them forever. |
+
+#### Erasure versus an append-only history
+
+The conflict is real: F17 makes revisions append-only with actor attribution, and Art. 17 says a
+user may have their personal data erased. Destroying revisions would corrupt playlist history
+that other people depend on and that is largely *not* about the departing user.
+
+**Resolution: anonymise the actor, preserve the history.** On erasure —
+
+- **Deleted outright:** provider tokens and per-user Client Secrets, sessions, private tags,
+  activity and security logs referencing the user.
+- **Anonymised in place:** `playlist_revision.actor_id`, `comment.user_id` and any other
+  attribution set to `NULL`, rendered as "a departed member". The *content* of a revision is
+  playlist structure, not personal data, so it survives.
+- **Untouched:** canonical records they contributed. Song metadata is public, and removing it
+  would damage a catalog the whole instance shares.
+- **Transferred or deleted:** playlists they own — ownership must be reassigned or the playlist
+  removed. This is a policy choice to make before the first deletion, not during one.
+
+Every nullable attribution column in the schema exists for this reason. Retrofitting
+anonymisation onto `NOT NULL` foreign keys after real data exists is precisely the expensive
+path §11 warns about.
 
 ---
 
@@ -820,10 +859,10 @@ the pure-Go `modernc.org/sqlite` driver chosen in §7.
 
 **Decisions still to make, but none blocking M1:**
 
-1. **License** — AGPL-3.0 vs MIT (§5, N4).
+1. ~~License~~ — **resolved 2026-08-03: MIT.**
 2. **Whether to build the MariaDB adapter at all** — revisit at M2 (§7.3).
-3. **Compliance** — assumed none; confirm (§6).
-4. **Prohibited patterns** — none recorded yet for this project.
+3. ~~Compliance~~ — **resolved 2026-08-03: GDPR applies** (§6.1).
+4. **Prohibited patterns** — none beyond the standard baseline (confirmed 2026-08-03).
 
 **Security profile to re-confirm at scaffold time** (§6): production profile; provider OAuth
 tokens are the crown jewels and must be AES-256-GCM encrypted at rest with a key from the

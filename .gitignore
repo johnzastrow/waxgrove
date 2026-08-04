@@ -24,3 +24,9 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Go build output
+/bin/
+*.db
+*.db-wal
+*.db-shm
