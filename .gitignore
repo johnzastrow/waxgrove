@@ -30,3 +30,7 @@ desktop.ini
 *.db
 *.db-wal
 *.db-shm
+
+# GitHub Pages build output
+/site/
+slides/node_modules/

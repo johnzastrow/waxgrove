@@ -1,0 +1,16 @@
+{
+  "name": "waxgrove-slides",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "slidev promo.md --open",
+    "dev:explainer": "slidev explainer.md --open",
+    "build:promo": "slidev build promo.md --base /waxgrove/slides/promo/ --out ../site/slides/promo",
+    "build:explainer": "slidev build explainer.md --base /waxgrove/slides/explainer/ --out ../site/slides/explainer",
+    "build": "npm run build:promo && npm run build:explainer"
+  },
+  "devDependencies": {
+    "@slidev/cli": "^52.0.0",
+    "@slidev/theme-default": "^0.25.0"
+  }
+}

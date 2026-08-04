@@ -1,0 +1,56 @@
+/* Waxgrove deck styling — analog archival, per docs/design/direction.html.
+   Deliberately not a streaming aesthetic: no neon, no gradients, no glass. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --wax-900:#0B0C09; --wax-800:#121410; --wax-700:#1A1D17; --wax-600:#242820;
+  --grove-500:#3D5638; --grove-300:#7A9670;
+  --cream-100:#F4EEDE; --cream-200:#E5DCC5; --cream-300:#CFC3A5;
+  --copper:#C07B45; --copper-br:#DFA063; --ember:#A8512A; --warn:#C9A227;
+}
+
+.slidev-layout {
+  background: var(--wax-900);
+  color: var(--cream-200);
+  font-family: 'IBM Plex Sans', sans-serif;
+  background-image: radial-gradient(ellipse 70% 40% at 50% -8%, rgba(61,86,56,.20), transparent 70%);
+  padding: 3rem 3.5rem;
+}
+.slidev-layout h1 {
+  font-family: 'Fraunces', Georgia, serif; font-weight: 600;
+  color: var(--cream-100); letter-spacing: -.03em; line-height: 1.02;
+}
+.slidev-layout h2 {
+  font-family: 'Fraunces', Georgia, serif; font-weight: 500;
+  color: var(--cream-100); letter-spacing: -.015em; margin-bottom: .5em;
+}
+.slidev-layout h3 { color: var(--cream-100); font-weight: 600; }
+.slidev-layout p, .slidev-layout li { color: var(--cream-200); }
+.slidev-layout strong { color: var(--cream-100); }
+.slidev-layout em { color: var(--grove-300); font-style: normal; }
+.slidev-layout code { font-family: 'IBM Plex Mono', monospace; color: var(--grove-300); }
+.slidev-layout a { color: var(--copper-br); }
+
+.eyebrow {
+  font-family: 'IBM Plex Mono', monospace; font-size: .62rem; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--copper); margin-bottom: 1rem;
+}
+.mono { font-family: 'IBM Plex Mono', monospace; }
+.dim  { color: var(--cream-300); }
+.big  { font-family:'Fraunces',serif; font-size: 4.2rem; font-weight:600; color: var(--copper-br); line-height:1; }
+.card {
+  border: 1px solid var(--wax-600); border-radius: 4px; background: var(--wax-800);
+  padding: 1rem 1.1rem;
+}
+.card.good { border-color: var(--grove-500); background: rgba(61,86,56,.13); }
+.card.warn { border-left: 2px solid var(--ember); background: rgba(168,81,42,.09); }
+.card h4 {
+  font-family:'IBM Plex Mono',monospace; font-size:.6rem; letter-spacing:.14em;
+  text-transform:uppercase; color: var(--copper); margin-bottom:.4rem;
+}
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+.grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:.9rem; }
+table { font-size: .78rem; }
+th { color: var(--copper); font-family:'IBM Plex Mono',monospace; font-size:.6rem;
+     letter-spacing:.12em; text-transform:uppercase; text-align:left; }
+td { color: var(--cream-200); border-color: var(--wax-600) !important; }

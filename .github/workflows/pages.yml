@@ -1,0 +1,73 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'slides/**'
+      - 'docs/design/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let an in-flight run finish rather than cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: slides/package-lock.json
+
+      - name: Install slide deps
+        working-directory: slides
+        run: npm ci
+
+      - name: Assemble static site
+        run: |
+          mkdir -p site/design site/assets
+          cp web/index.html site/
+          cp docs/design/*.html site/design/
+          cp -r docs/design/logo site/assets/logo
+          cp docs/design/logo/favicon.svg site/assets/favicon.svg
+          # Serve .html verbatim; no Jekyll processing.
+          touch site/.nojekyll
+
+      - name: Build slide decks
+        working-directory: slides
+        run: npm run build
+
+      - name: Verify the site assembled
+        run: |
+          test -f site/index.html
+          test -f site/design/direction.html
+          test -f site/slides/promo/index.html
+          test -f site/slides/explainer/index.html
+          echo "pages:"; find site -maxdepth 2 -name '*.html' | sort
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
