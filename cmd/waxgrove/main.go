@@ -18,7 +18,9 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/config"
 	"github.com/johnzastrow/waxgrove/internal/crypto"
 	"github.com/johnzastrow/waxgrove/internal/httpapi"
+	"github.com/johnzastrow/waxgrove/internal/musicbrainz"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
+	"github.com/johnzastrow/waxgrove/internal/resolve"
 )
 
 func main() {
@@ -71,9 +73,18 @@ func run() error {
 	defer func() { _ = store.Close() }()
 	slog.Info("database ready", "path", cfg.DatabaseURL)
 
+	mb := musicbrainz.New(cfg.BaseURL, httpapi.Version)
+	api := &httpapi.API{
+		Store:    store,
+		Resolver: resolve.New(store.Records(), mb),
+		Remote:   mb,
+		Env:      cfg.Environment,
+		Secure:   cfg.Environment == "production",
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.New(store, cfg.Environment).Routes(),
+		Handler:           httpapi.New(store, cfg.Environment).WithAPI(api).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

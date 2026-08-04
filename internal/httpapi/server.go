@@ -17,16 +17,23 @@ type Pinger interface {
 type Server struct {
 	store Pinger
 	env   string
+	api   *API // nil in tests that only exercise /health
 }
 
 func New(store Pinger, env string) *Server {
 	return &Server{store: store, env: env}
 }
 
+// WithAPI attaches the application routes.
+func (s *Server) WithAPI(a *API) *Server { s.api = a; return s }
+
 // Routes builds the mux. Security headers are applied to everything.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	if s.api != nil {
+		s.api.Mount(mux)
+	}
 	return securityHeaders(mux)
 }
 

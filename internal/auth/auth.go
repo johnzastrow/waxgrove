@@ -94,3 +94,26 @@ func NewToken() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+
+// dummyHash is a real Argon2id hash, used only by EqualiseTiming.
+var dummyHash string
+
+func init() {
+	// Generated once at startup so it is guaranteed well-formed and matches the
+	// current cost parameters. A hand-written constant risks being malformed,
+	// which would make the comparison fast and defeat the purpose.
+	h, err := HashPassword("waxgrove-timing-equalisation-placeholder")
+	if err != nil {
+		panic("auth: cannot build timing placeholder: " + err.Error())
+	}
+	dummyHash = h
+}
+
+// EqualiseTiming spends roughly the same work as a real password check.
+//
+// Call it on the "no such account" path so a failed lookup and a failed
+// password take comparable time, and the response cannot be used to enumerate
+// which addresses are registered.
+func EqualiseTiming(password string) {
+	_ = VerifyPassword(password, dummyHash)
+}
