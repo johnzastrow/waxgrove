@@ -5,9 +5,10 @@ and playlists between friends, regardless of which streaming service each person
 
 Waxgrove stores **metadata only**. It never stores, hosts, or serves audio files.
 
-> **Status: pre-implementation.** Requirements are drafted and all open architectural decisions
-> (D1–D9) are resolved. No code has been written yet. See
-> [`docs/requirements.md`](docs/requirements.md).
+> **Status: foundation scaffolded.** All architectural decisions (D1–D11) are resolved and the
+> Go foundation is in place — schema, store, config, secrets and health endpoint, with tests.
+> No features yet; M1 is next. See [`docs/requirements.md`](docs/requirements.md) and
+> [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md).
 
 ---
 
@@ -61,7 +62,7 @@ quietly handing him a shorter playlist.
 
 | | |
 |---|---|
-| **Open source** | License pending — AGPL-3.0 vs MIT |
+| **Open source** | **MIT** |
 | **Self-hostable** | Single binary or `docker run`, no external services required to boot |
 | **Low resources** | Runs comfortably on a Raspberry Pi or a $5 VPS |
 | **Standards-based** | ISRC, MusicBrainz MBID, JSPF/XSPF, OAuth 2.0 + PKCE, OIDC |
@@ -186,15 +187,33 @@ papering over it. Anti-corporate without being shouty. Plain language, no hype.
 | Document | Contents |
 |---|---|
 | [`docs/requirements.md`](docs/requirements.md) | Requirements, architecture, streaming-API feasibility findings, security profile, resolved decisions (D1–D10) |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Schema: mermaid ERDs, business rules, and a full data dictionary |
 | [`docs/streaming-integration.md`](docs/streaming-integration.md) | How Waxgrove exchanges playlists with Spotify and Apple Music — credentials, authorisation, import/export mechanics, storefronts, rate limits, and the user journeys |
 | [`docs/design/direction.html`](docs/design/direction.html) | Visual direction and phone-tier screens |
 | [`docs/design/desktop.html`](docs/design/desktop.html) | Desktop layouts and the tier model |
 | [`docs/design/connect-and-jobs.html`](docs/design/connect-and-jobs.html) | Connect wizard (F13) and the sync job surface (F22) |
+| [`docs/design/integration-infographic.html`](docs/design/integration-infographic.html) | Plain-language infographic: how a user connects a service and moves a playlist |
 | [`docs/design/logo/`](docs/design/logo/) | Logo files, size guidance, usage notes |
 | [`docs/objectives.md`](docs/objectives.md) | Original project brief and goals |
 | [`docs/naming.md`](docs/naming.md) | Name selection and namespace availability research |
 
+## Development
+
+Requires Go 1.26+. The binary is static with `CGO_ENABLED=0` (pure-Go SQLite driver).
+
+```bash
+make check          # vet + race tests + gofmt gate
+make build          # -> bin/waxgrove
+make pi             # cross-compile for a Raspberry Pi (arm64)
+
+export WAXGROVE_SECRET_KEY=$(go run ./cmd/waxgrove genkey)
+make run
+curl localhost:8080/health
+```
+
+`WAXGROVE_SECRET_KEY` is a base64 AES-256 key used to encrypt provider tokens at rest. There is
+no default: generating one silently would encrypt tokens under a key that vanishes on restart.
+
 ## License
 
-Not yet chosen. AGPL-3.0 and MIT are both under consideration — see
-[`docs/requirements.md`](docs/requirements.md) §5, N4.
+[MIT](LICENSE).
