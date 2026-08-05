@@ -37,12 +37,22 @@ services:
       WAXGROVE_CONTACT: ${WAXGROVE_CONTACT:-}
 
     # Bound to loopback: put a TLS-terminating proxy in front rather than
-    # exposing this on the network directly.
+    # exposing this on the network directly. The host port is configurable
+    # because a host that already runs other services will have 8080 taken.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${WAXGROVE_HOST_PORT:-8080}:8080"
 
     volumes:
       - waxgrove-data:/data
+
+    # Bounded on purpose. Waxgrove idles well under this, but Argon2id
+    # deliberately costs 64 MiB per password hash, so a burst of logins is the
+    # one thing that can spike it — and on a small shared host an unbounded
+    # spike takes the neighbours down, not Waxgrove.
+    deploy:
+      resources:
+        limits:
+          memory: ${WAXGROVE_MEM_LIMIT:-256m}
 
     # The image already runs as nonroot (uid 65532); these close the rest.
     read_only: true

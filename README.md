@@ -216,6 +216,24 @@ Images are built for **`linux/amd64` only** — that is the deployment target, a
 CI asserts the architecture rather than trusting the builder's default. Building
 on an arm64 machine emulates; `make docker` does it explicitly.
 
+### Behind a reverse proxy
+
+The container binds loopback only, so something in front terminates TLS. With
+Caddy that is the whole configuration:
+
+```caddyfile
+waxgrove.example.com {
+    reverse_proxy 127.0.0.1:8092
+}
+```
+
+Two knobs exist for hosts that already run other things:
+
+| Variable | Default | Why you would change it |
+|---|---|---|
+| `WAXGROVE_HOST_PORT` | `8080` | 8080 is commonly taken. Only the host side moves; the container still listens on 8080. |
+| `WAXGROVE_MEM_LIMIT` | `256m` | Waxgrove idles around **5 MiB**, but Argon2id deliberately costs 64 MiB per password hash, so a burst of logins is what the headroom is for. On a shared box the limit matters more than the idle figure: it stops a spike taking the neighbours down. |
+
 The first account to register becomes the admin; everyone after that needs an
 invite code from **You → Invites**.
 
