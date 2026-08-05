@@ -555,6 +555,35 @@ The consequence for sizing: **idle cost is negligible; the headroom exists for
 concurrent logins.** Sizing this instance by its idle figure would be a mistake
 in the other direction.
 
+**Concurrent hashing is bounded, because it had to be.** `/api/login` is
+unauthenticated and each request costs 64 MiB, so concurrency was a memory
+multiplier available to anyone who could reach the instance. Measured on a
+256 MiB container: 4 concurrent logins peaked at 253 MiB, and 8 and 16 were
+OOM-killed outright. `auth.MaxConcurrentHashes` now caps it at 2, which costs
+nothing in throughput — Argon2 is CPU- and memory-bound, so more in flight
+finishes no sooner — and turns the failure mode from a kill into a queue.
+
+**The runtime is told what the container knows.** Go sizes its heap against
+`GOGC`, which knows nothing about a cgroup limit, so in a memory-limited
+container it grows until the kernel intervenes — measured at 253 MiB against a
+256 MiB limit, flat, one allocation from a kill. `internal/memlimit` reads the
+limit the container is already running under and derives `GOMEMLIMIT` from it,
+so there is one number to set rather than two that can drift. The same 16
+concurrent logins then peak at 78% of the limit instead of 99%.
+
+With that in place the deployed limit is **192 MiB**, chosen from measurement:
+16 concurrent logins peak at 72% of it, where 128 MiB survives the same load
+only by reclaiming continuously.
+
+**Load testing found a correctness bug, not just a memory one.** Driving
+concurrent searches surfaced a connection-pool deadlock: a query that held an
+open cursor and then issued a per-row query needed two pooled connections at
+once, so past the pool size every connection was held by a cursor waiting for a
+connection. The process kept serving static files while every database request
+hung forever and the health check stayed red. It is fixed and regression-tested
+(`internal/repository/sqlite/concurrency_test.go`), and it is the reason this
+harness exists rather than a one-off measurement.
+
 ---
 
 ## 6. Security profile (draft — for §8 confirmation)

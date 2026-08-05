@@ -19,6 +19,7 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/config"
 	"github.com/johnzastrow/waxgrove/internal/crypto"
 	"github.com/johnzastrow/waxgrove/internal/httpapi"
+	"github.com/johnzastrow/waxgrove/internal/memlimit"
 	"github.com/johnzastrow/waxgrove/internal/musicbrainz"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
@@ -106,6 +107,15 @@ func searchOrNil(c *musicbrainz.Client) httpapi.RemoteSearch {
 func run() error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
+
+	// Before anything allocates: the collector needs to know it is in a box.
+	// Without this it sizes the heap against GOGC alone and grows until the
+	// kernel kills the process (see internal/memlimit).
+	if msg, err := memlimit.Apply(); err == nil {
+		slog.Info("memory limit", "detail", msg)
+	} else if !errors.Is(err, memlimit.ErrNoLimit) {
+		slog.Warn("could not read the cgroup memory limit", "err", err)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

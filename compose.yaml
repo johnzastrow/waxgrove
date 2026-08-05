@@ -45,14 +45,17 @@ services:
     volumes:
       - waxgrove-data:/data
 
-    # Bounded on purpose. Waxgrove idles well under this, but Argon2id
-    # deliberately costs 64 MiB per password hash, so a burst of logins is the
-    # one thing that can spike it — and on a small shared host an unbounded
-    # spike takes the neighbours down, not Waxgrove.
+    # Bounded on purpose, and the binary reads this limit at startup to set
+    # GOMEMLIMIT from it (internal/memlimit) — so this is one number, not two
+    # that have to be kept in sync.
+    #
+    # 192m is measured, not guessed: scripts/memcheck.sh drives 16 concurrent
+    # logins, the worst case, and peaks at 72% of it. 128m survives the same
+    # load but only by reclaiming continuously, which is not headroom.
     deploy:
       resources:
         limits:
-          memory: ${WAXGROVE_MEM_LIMIT:-256m}
+          memory: ${WAXGROVE_MEM_LIMIT:-192m}
 
     # The image already runs as nonroot (uid 65532); these close the rest.
     read_only: true

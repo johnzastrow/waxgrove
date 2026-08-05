@@ -232,7 +232,34 @@ Two knobs exist for hosts that already run other things:
 | Variable | Default | Why you would change it |
 |---|---|---|
 | `WAXGROVE_HOST_PORT` | `8080` | 8080 is commonly taken. Only the host side moves; the container still listens on 8080. |
-| `WAXGROVE_MEM_LIMIT` | `256m` | Waxgrove idles around **5 MiB**, but Argon2id deliberately costs 64 MiB per password hash, so a burst of logins is what the headroom is for. On a shared box the limit matters more than the idle figure: it stops a spike taking the neighbours down. |
+| `WAXGROVE_MEM_LIMIT` | `192m` | See below. Raise it if you have many members signing in at once; there is little reason to lower it. |
+
+### Memory, measured
+
+Waxgrove idles around **5 MiB**. The limit is not for the idle case — Argon2id
+costs 64 MiB per password hash by design, so a burst of sign-ins is the only
+thing that moves the number.
+
+The binary reads the container's own memory limit at startup and sets
+`GOMEMLIMIT` from it, so `WAXGROVE_MEM_LIMIT` is the single knob. Without that,
+Go sizes its heap against `GOGC` alone, which knows nothing about a cgroup, and
+grows until the kernel kills the process.
+
+`scripts/memcheck.sh` re-measures all of this against the real container. With
+16 concurrent logins — the worst case it drives:
+
+| Limit | Peak | Verdict |
+|---|---|---|
+| 256m | 78% | Comfortable, and more than needed |
+| **192m** | **72%** | **Default.** Comfortable |
+| 128m | 100% | Survives, but only by reclaiming continuously. Not headroom |
+
+Re-run it as the project grows rather than trusting this table:
+
+```bash
+scripts/memcheck.sh                  # every scenario at the default limit
+scripts/memcheck.sh --limit 128m     # find where it starts to hurt
+```
 
 The first account to register becomes the admin; everyone after that needs an
 invite code from **You → Invites**.

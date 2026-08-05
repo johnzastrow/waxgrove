@@ -28,7 +28,9 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-LIMIT="${WAXGROVE_MEM_LIMIT:-256m}"
+# Matches the default in compose.yaml. Changing one without the other is how a
+# measured figure quietly stops describing what actually ships.
+LIMIT="${WAXGROVE_MEM_LIMIT:-192m}"
 PORT="${WAXGROVE_HOST_PORT:-8093}"
 ONLY=""
 SAMPLE_MS=50
@@ -139,15 +141,34 @@ with_sampling() {
 
 report() {
   local label="$1" p="$2" peak_anon="$3"
-  local cg_peak settled oom
+  local cg_peak settled oom high restarts limit_bytes pct
   cg_peak="$(cat "$p/memory.peak" 2>/dev/null || echo 0)"
   settled="$(read_anon "$p")"
   oom="$(awk '/^oom_kill /{print $2}' "$p/memory.events" 2>/dev/null || echo 0)"
+  # `high` counts times the cgroup pushed back on allocation. Non-zero means
+  # the container was reclaiming under pressure to stay alive, which survives
+  # but is not headroom.
+  high="$(awk '/^high /{print $2}' "$p/memory.events" 2>/dev/null || echo 0)"
+  limit_bytes="$(cat "$p/memory.max" 2>/dev/null || echo 0)"
+  restarts="$(docker inspect "$(docker ps -qf name=waxgrove-waxgrove-1)" \
+              --format '{{.RestartCount}}' 2>/dev/null || echo '?')"
 
-  printf '   %-22s anon peak %7s MiB | anon now %7s MiB | cgroup peak %7s MiB' \
-    "$label" "$(mib "$peak_anon")" "$(mib "$settled")" "$(mib "$cg_peak")"
+  pct='?'
+  if [ "${limit_bytes:-0}" -gt 0 ] 2>/dev/null; then
+    pct="$(awk -v a="$cg_peak" -v b="$limit_bytes" 'BEGIN{printf "%d", (a*100)/b}')"
+  fi
+
+  printf '   %-22s anon peak %7s MiB | anon now %7s MiB | cgroup peak %7s MiB (%s%% of limit)' \
+    "$label" "$(mib "$peak_anon")" "$(mib "$settled")" "$(mib "$cg_peak")" "$pct"
   if [ "${oom:-0}" != "0" ]; then
-    printf ' | \033[31mOOM-KILLED %s\033[0m' "$oom"
+    printf ' | \033[31mOOM-KILLED x%s\033[0m' "$oom"
+  fi
+  if [ "${restarts:-0}" != "0" ] && [ "${restarts:-?}" != "?" ]; then
+    printf ' | \033[31mRESTARTED x%s\033[0m' "$restarts"
+  fi
+  # Anything above this is surviving by reclaiming, not by having room.
+  if [ "${pct:-0}" != '?' ] && [ "${pct:-0}" -ge 90 ] 2>/dev/null; then
+    printf ' | \033[33mAT THE CEILING\033[0m'
   fi
   printf '\n'
 }
