@@ -7,7 +7,7 @@ LDFLAGS := -s -w -X github.com/johnzastrow/waxgrove/internal/httpapi.Version=$(V
 # CGO off keeps the pure-Go sqlite driver and a static binary (§7).
 export CGO_ENABLED := 0
 
-.PHONY: all build test vet fmt check clean run genkey pi web web-dev web-check docker
+.PHONY: all build test vet fmt check clean run genkey web web-dev web-check docker
 
 all: check build
 
@@ -42,10 +42,6 @@ web-check: web
 docker:
 	docker build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t waxgrove:$(VERSION) .
 	@docker image inspect waxgrove:$(VERSION) --format 'built {{.Os}}/{{.Architecture}}'
-
-# Cross-compile for a Raspberry Pi — the N1 target.
-pi:
-	GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-arm64 $(PKG)
 
 # The race detector needs cgo, so it is re-enabled for this target only.
 # Shipped binaries stay CGO_ENABLED=0 (pure-Go sqlite, static, §7).

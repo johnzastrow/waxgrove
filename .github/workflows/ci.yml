@@ -36,9 +36,6 @@ jobs:
       - name: Build
         run: go build -trimpath ./...
 
-      - name: Cross-compile for Raspberry Pi (N1)
-        run: GOOS=linux GOARCH=arm64 go build -trimpath ./cmd/waxgrove
-
   # internal/webui/dist is committed so `go build` works without Node. That is
   # only safe if it actually matches app/ — this job is what makes it so.
   frontend:

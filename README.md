@@ -64,7 +64,7 @@ quietly handing him a shorter playlist.
 |---|---|
 | **Open source** | **MIT** |
 | **Self-hostable** | Single binary or `docker run`, no external services required to boot |
-| **Low resources** | Runs comfortably on a Raspberry Pi or a $5 VPS |
+| **Low resources** | Runs comfortably on a $5 VPS |
 | **Standards-based** | ISRC, MusicBrainz MBID, JSPF/XSPF, OAuth 2.0 + PKCE, OIDC |
 | **Useful with zero connectors** | A hard requirement, not a fallback |
 
@@ -227,7 +227,7 @@ driver), and the PWA is compiled into it — one artifact, nothing external to b
 ```bash
 make check          # vet + race tests + gofmt gate
 make build          # -> bin/waxgrove
-make pi             # cross-compile for a Raspberry Pi (arm64)
+make docker         # -> waxgrove:<version>, linux/amd64
 
 export WAXGROVE_SECRET_KEY=$(go run ./cmd/waxgrove genkey)
 make run
