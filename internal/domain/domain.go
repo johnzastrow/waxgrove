@@ -45,6 +45,10 @@ const (
 	MatchMapper MatchMethod = "mapper" // ListenBrainz MBID Mapper
 	MatchFuzzy  MatchMethod = "fuzzy"  // local normalised comparison
 	MatchNone   MatchMethod = ""       // unresolved
+	// MatchChosen means a human picked from the alternatives. Distinct from
+	// the automatic methods on purpose: an audit should be able to tell what
+	// was guessed from what was decided (§3.2).
+	MatchChosen MatchMethod = "chosen"
 )
 
 // Match is the outcome of running a candidate through the resolution ladder.
@@ -109,8 +113,11 @@ const (
 // Playlist is an ordered list of canonical records owned by one user and
 // shared by reference (D8).
 type Playlist struct {
-	ID          string
-	OwnerID     string // empty once the owner is anonymised
+	ID      string
+	OwnerID string // empty once the owner is anonymised
+	// OwnerName is filled in only by the listings that show it, so a playlist
+	// read on its own does not pay for a join it does not need.
+	OwnerName   string
 	Title       string
 	Description string
 	CurrentRev  int
@@ -205,6 +212,51 @@ type JobItem struct {
 	RecordID string
 	Status   string
 	Detail   string
+}
+
+// CrateItem is one staged candidate in a user's crate (F16, §3.3).
+//
+// Candidate is always present, even for a resolved item: it is what the user
+// actually asked for, and keeping it is what allows a later re-resolution
+// against a warmer catalogue. Record is present only once something matched.
+type CrateItem struct {
+	ID         string
+	Position   int
+	Status     string // resolved | ambiguous | unresolved
+	RecordID   string
+	Record     *Record
+	Candidate  Candidate
+	SourceRef  string
+	Method     MatchMethod
+	Confidence float64
+}
+
+// NeedsDecision reports whether this item is waiting on a human (F12).
+func (c CrateItem) NeedsDecision() bool { return c.Status != "resolved" }
+
+// Tag is one label on a playlist (F18).
+//
+// Private tags are visible only to their author. Mine tells the UI which ones
+// the caller may remove — but the filtering itself happens server-side, because
+// a private tag hidden only by the client is not private (§6).
+type Tag struct {
+	ID         string
+	Name       string
+	Visibility string // private | shared
+	Mine       bool
+}
+
+// Comment is one message about a playlist (F18).
+//
+// Author is a display name, or "a departed member" once the account is erased —
+// the comment is content and survives the account (BR-4).
+type Comment struct {
+	ID        string
+	Body      string
+	Author    string
+	AuthorID  string
+	Mine      bool
+	CreatedAt string
 }
 
 // Revision is one entry in a playlist's append-only content history (F17).

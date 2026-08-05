@@ -156,6 +156,60 @@ func (r *PlaylistRepo) ListOwned(ctx context.Context, ownerID string) ([]domain.
 	return out, nil
 }
 
+// ListShared returns everyone else's playlists, newest first (F9).
+//
+// Playlists are shared by reference across the instance (D8), so "shared" is
+// everything not yours. There is no visibility flag because there is no private
+// playlist: an instance is a group of friends who chose to be one.
+//
+// Track lists are omitted — a discovery screen needs counts, and serialising
+// every track of fifty playlists to show fifty numbers is the kind of thing
+// that makes a small box feel slow.
+func (r *PlaylistRepo) ListShared(ctx context.Context, excludeUserID string, limit int) ([]domain.Playlist, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := r.s.Reader().QueryContext(ctx, `
+		SELECT p.id, p.owner_id, p.title, p.description, p.current_rev,
+		       COALESCE(u.display_name, ''),
+		       (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id)
+		  FROM playlists p
+		  LEFT JOIN users u ON u.id = p.owner_id
+		 WHERE p.owner_id IS NOT ?
+		 ORDER BY p.updated_at DESC
+		 LIMIT ?`, excludeUserID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.Playlist
+	for rows.Next() {
+		var (
+			p           domain.Playlist
+			owner, desc sql.NullString
+			ownerName   string
+			count       int
+		)
+		// description is nullable, and an empty one is stored as NULL.
+		if err := rows.Scan(&p.ID, &owner, &p.Title, &desc,
+			&p.CurrentRev, &ownerName, &count); err != nil {
+			return nil, err
+		}
+		p.OwnerID, p.Description = owner.String, desc.String
+		p.OwnerName = ownerName
+		if p.OwnerName == "" {
+			// BR-4: the owner was erased, but their playlist is content and
+			// stays. Naming it as unowned beats showing a blank.
+			p.OwnerName = "a departed member"
+		}
+		// Tracks are not loaded here; the count stands in for them.
+		p.Tracks = make([]domain.Track, count)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // AddRecords appends records and writes exactly ONE revision, however many
 // tracks were added. A crate commit of twenty songs is one authored event, not
 // twenty — which is what keeps blame legible (§3.3).

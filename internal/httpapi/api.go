@@ -77,6 +77,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("GET /api/playlists/{id}/export.jspf", a.authed(a.exportJSPF))
 	mux.Handle("POST /api/playlists/import", a.authed(a.importJSPF))
 
+	// The crate, annotations, discovery and the privacy pair.
+	a.mountCrate(mux)
+
 	// Provider routes, only when a connector is wired (N6).
 	a.pending = newAuthStore()
 	a.mountConnect(mux)
