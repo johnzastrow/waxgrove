@@ -34,10 +34,20 @@ type Runner struct {
 
 	mu      sync.Mutex
 	running bool
+	// base is the runner's own lifetime, set by Start. Work must never inherit
+	// the context of whoever queued it: an API request's context is cancelled
+	// the moment its response is written, which would kill an import a few
+	// milliseconds after starting it.
+	base context.Context
 }
 
 func NewRunner(store *sqlite.Store, sp *connector.Spotify, r *resolve.Resolver) *Runner {
-	return &Runner{store: store, spotify: sp, resolver: r, poll: 2 * time.Second}
+	return &Runner{
+		store: store, spotify: sp, resolver: r,
+		poll: 2 * time.Second,
+		// Until Start runs, work has no lifetime of its own to borrow.
+		base: context.Background(),
+	}
 }
 
 // Start runs until the context is cancelled.
@@ -46,6 +56,10 @@ func NewRunner(store *sqlite.Store, sp *connector.Spotify, r *resolve.Resolver) 
 // job nothing is working on but which reports as running is worse than one that
 // reports as failed: the user waits instead of retrying.
 func (r *Runner) Start(ctx context.Context) {
+	r.mu.Lock()
+	r.base = ctx
+	r.mu.Unlock()
+
 	if n, err := r.store.Jobs().ReclaimRunning(ctx); err != nil {
 		slog.Error("could not reclaim interrupted jobs", "err", err)
 	} else if n > 0 {
@@ -66,7 +80,16 @@ func (r *Runner) Start(ctx context.Context) {
 
 // Wake asks the runner to look for work now rather than at the next tick, so
 // pressing a button feels immediate.
-func (r *Runner) Wake(ctx context.Context) { go r.drain(ctx) }
+//
+// It deliberately takes no context. The work belongs to the runner's lifetime,
+// not to the request that queued it — inheriting an HTTP request's context
+// would cancel the job as soon as the response was written.
+func (r *Runner) Wake() {
+	r.mu.Lock()
+	ctx := r.base
+	r.mu.Unlock()
+	go r.drain(ctx)
+}
 
 func (r *Runner) drain(ctx context.Context) {
 	r.mu.Lock()
@@ -147,7 +170,7 @@ func (r *Runner) QueueImport(ctx context.Context, req ImportRequest) (*domain.Jo
 	if err != nil {
 		return nil, err
 	}
-	r.Wake(ctx)
+	r.Wake()
 	return job, nil
 }
 
@@ -235,7 +258,7 @@ func (r *Runner) QueueExport(ctx context.Context, req ExportRequest) (*domain.Jo
 	if err != nil {
 		return nil, err
 	}
-	r.Wake(ctx)
+	r.Wake()
 	return job, nil
 }
 

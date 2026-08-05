@@ -164,24 +164,54 @@ func newHarness(t *testing.T) *harness {
 	// Remote nil: the resolution ladder must work with no metadata source (N6).
 	runner := NewRunner(store, conn, resolve.New(store.Records(), nil))
 
+	// Queueing wakes a background drain, so the test has to be able to stop it.
+	// Registered after the store's cleanup so it runs first (cleanups are LIFO)
+	// — otherwise a drain outlives the database and logs a confusing
+	// "database is closed" against whichever test happens to be running next.
+	runCtx, cancel := context.WithCancel(context.Background())
+	runner.base = runCtx
+	t.Cleanup(func() {
+		cancel()
+		for range 300 {
+			runner.mu.Lock()
+			busy := runner.running
+			runner.mu.Unlock()
+			if !busy {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Error("a job was still running when the test finished")
+	})
+
 	return &harness{store: store, runner: runner, userID: u.ID, fake: fake}
 }
 
-// runToCompletion drives the job synchronously rather than waiting on the
-// poller, so the test asserts on outcomes instead of on timing.
+// runToCompletion waits for a job to finish.
+//
+// It cannot simply call drain and read the result: queueing already woke a
+// background drain, and a second drain returns immediately when one is in
+// flight. Polling for the terminal state is what the runner actually
+// guarantees, so that is what this asserts on.
 func (h *harness) runToCompletion(t *testing.T, jobID string) *domain.Job {
 	t.Helper()
 	ctx := context.Background()
-	h.runner.drain(ctx)
+	h.runner.drain(ctx) // in case nothing else is running, start now
 
-	job, err := h.store.Jobs().Get(ctx, jobID)
-	if err != nil {
-		t.Fatalf("get job: %v", err)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		job, err := h.store.Jobs().Get(ctx, jobID)
+		if err != nil {
+			t.Fatalf("get job: %v", err)
+		}
+		if job.Terminal() {
+			return job
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job is still %s after 20s", job.State)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	if !job.Terminal() {
-		t.Fatalf("job is %s, expected it to have finished", job.State)
-	}
-	return job
 }
 
 func track(id, name, artist, isrc string) map[string]any {
@@ -513,6 +543,34 @@ func TestRunningJobsAreRequeuedAfterARestart(t *testing.T) {
 	got, _ := h.store.Jobs().Get(ctx, job.ID)
 	if got.State != domain.JobQueued {
 		t.Errorf("state = %s, want queued", got.State)
+	}
+}
+
+// Work must not inherit the context of whoever queued it.
+//
+// This was a real bug: Wake took the caller's context, so a job started from an
+// API request was cancelled the instant that request's response was written. It
+// looked fine only because the 2-second poller picked the job up afterwards
+// with the runner's own context — a race that would have shown up as
+// mysteriously slow imports rather than as a failure.
+func TestQueuedWorkOutlivesTheRequestThatQueuedIt(t *testing.T) {
+	h := newHarness(t)
+	h.fake.tracks = []map[string]any{track("1", "Pink Moon", "Nick Drake", "GBAYE0601498")}
+
+	// A context that is already dead, standing in for a completed request.
+	reqCtx, cancel := context.WithCancel(context.Background())
+	job, err := h.runner.QueueImport(reqCtx, ImportRequest{
+		UserID: h.userID, Ref: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+	})
+	if err != nil {
+		t.Fatalf("QueueImport: %v", err)
+	}
+	cancel()
+
+	done := h.runToCompletion(t, job.ID)
+	if done.State != domain.JobDone {
+		t.Fatalf("state = %s (%q): the job died with the request that queued it",
+			done.State, done.Error)
 	}
 }
 
