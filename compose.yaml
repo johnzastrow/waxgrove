@@ -49,13 +49,16 @@ services:
     # GOMEMLIMIT from it (internal/memlimit) — so this is one number, not two
     # that have to be kept in sync.
     #
-    # 192m is measured, not guessed: scripts/memcheck.sh drives 16 concurrent
-    # logins, the worst case, and peaks at 72% of it. 128m survives the same
-    # load but only by reclaiming continuously, which is not headroom.
+    # 256m is measured, not guessed. The binding case is not a login burst —
+    # it is startup, where the timing-placeholder hash built at init() and the
+    # first real sign-in are both live before the collector has settled. That
+    # floor is around 190 MiB and cannot be compressed, because both halves of
+    # it are genuinely in use. At 192m it lands exactly on the ceiling; at
+    # 256m every scenario scripts/memcheck.sh drives stays under 80%.
     deploy:
       resources:
         limits:
-          memory: ${WAXGROVE_MEM_LIMIT:-192m}
+          memory: ${WAXGROVE_MEM_LIMIT:-256m}
 
     # The image already runs as nonroot (uid 65532); these close the rest.
     read_only: true

@@ -232,33 +232,40 @@ Two knobs exist for hosts that already run other things:
 | Variable | Default | Why you would change it |
 |---|---|---|
 | `WAXGROVE_HOST_PORT` | `8080` | 8080 is commonly taken. Only the host side moves; the container still listens on 8080. |
-| `WAXGROVE_MEM_LIMIT` | `192m` | See below. Raise it if you have many members signing in at once; there is little reason to lower it. |
+| `WAXGROVE_MEM_LIMIT` | `256m` | See below. Lowering it is the change to be careful with. |
 
 ### Memory, measured
 
-Waxgrove idles around **5 MiB**. The limit is not for the idle case — Argon2id
-costs 64 MiB per password hash by design, so a burst of sign-ins is the only
-thing that moves the number.
+Waxgrove **idles around 4 MiB**. The limit is not for the idle case: Argon2id
+costs 64 MiB per password hash by design, and that is the only thing that moves
+the number.
 
-The binary reads the container's own memory limit at startup and sets
+The binary reads the container's own memory limit at startup and derives
 `GOMEMLIMIT` from it, so `WAXGROVE_MEM_LIMIT` is the single knob. Without that,
-Go sizes its heap against `GOGC` alone, which knows nothing about a cgroup, and
-grows until the kernel kills the process.
+Go sizes its heap against `GOGC` alone — which knows nothing about a cgroup —
+and grows until the kernel kills the process.
 
-`scripts/memcheck.sh` re-measures all of this against the real container. With
-16 concurrent logins — the worst case it drives:
+The binding case is **startup, not load**. The timing placeholder built at
+`init()` and the first real sign-in are both live before the collector has
+settled, and that floor of roughly 190 MiB cannot be compressed, because both
+halves of it are genuinely in use. Concurrent sign-ins are cheaper than that:
+hashing is capped at two at a time, so 16 at once queues rather than multiplies.
 
-| Limit | Peak | Verdict |
+Measured by `scripts/memcheck.sh` across every scenario it drives:
+
+| Limit | Worst scenario | Verdict |
 |---|---|---|
-| 256m | 78% | Comfortable, and more than needed |
-| **192m** | **72%** | **Default.** Comfortable |
-| 128m | 100% | Survives, but only by reclaiming continuously. Not headroom |
+| **256m** | 79% | **Default.** Every scenario under 80% |
+| 192m | 100% (startup) | Lands on the ceiling before anyone has signed in |
+| 128m | 100% | Survives only by reclaiming continuously |
 
-Re-run it as the project grows rather than trusting this table:
+Re-run it as the project grows rather than trusting this table — it exists
+because a load test found a deadlock the unit tests could not:
 
 ```bash
 scripts/memcheck.sh                  # every scenario at the default limit
-scripts/memcheck.sh --limit 128m     # find where it starts to hurt
+scripts/memcheck.sh --limit 192m     # find where it starts to hurt
+scripts/memcheck.sh --only logins-x16
 ```
 
 The first account to register becomes the admin; everyone after that needs an

@@ -571,9 +571,16 @@ limit the container is already running under and derives `GOMEMLIMIT` from it,
 so there is one number to set rather than two that can drift. The same 16
 concurrent logins then peak at 78% of the limit instead of 99%.
 
-With that in place the deployed limit is **192 MiB**, chosen from measurement:
-16 concurrent logins peak at 72% of it, where 128 MiB survives the same load
-only by reclaiming continuously.
+With that in place the deployed limit is **256 MiB**, chosen from measurement.
+The binding case turned out to be **startup, not load**: the timing placeholder
+built at `auth.init()` and the first real sign-in are both live before the
+collector has settled, a floor of roughly 190 MiB that cannot be compressed
+because both halves are genuinely in use. At 192 MiB that lands exactly on the
+ceiling before anyone has signed in; at 256 MiB every scenario stays under 80%.
+
+Worth recording as a method note: 192 MiB looked correct when only the
+concurrent-login scenario was measured, and was wrong. Measuring the scenario
+you expect to be worst is not the same as measuring all of them.
 
 **Load testing found a correctness bug, not just a memory one.** Driving
 concurrent searches surfaced a connection-pool deadlock: a query that held an

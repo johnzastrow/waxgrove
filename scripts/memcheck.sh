@@ -30,7 +30,7 @@ cd "$REPO"
 
 # Matches the default in compose.yaml. Changing one without the other is how a
 # measured figure quietly stops describing what actually ships.
-LIMIT="${WAXGROVE_MEM_LIMIT:-192m}"
+LIMIT="${WAXGROVE_MEM_LIMIT:-256m}"
 PORT="${WAXGROVE_HOST_PORT:-8093}"
 ONLY=""
 SAMPLE_MS=50
