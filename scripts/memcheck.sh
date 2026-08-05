@@ -116,7 +116,10 @@ with_sampling() {
   sampler_loop "$p" "$stopfile" "$maxfile" &
   local sampler=$!
 
-  "$@"
+  # In a subshell, so that a bare `wait` inside a workload sees only its own
+  # background curls. Run directly, it would also wait for the sampler above —
+  # which does not exit until the workload returns. That deadlocks.
+  ( "$@" )
 
   rm -f "$stopfile"
   wait "$sampler" 2>/dev/null
