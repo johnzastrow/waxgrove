@@ -45,6 +45,7 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	noteHash() // see scavenge.go: 64 MiB of garbage that nothing else will collect
 
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads,
@@ -78,6 +79,7 @@ func VerifyPassword(password, encoded string) error {
 	}
 
 	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want)))
+	noteHash()
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return ErrMismatch
 	}
