@@ -75,8 +75,22 @@ jobs:
       - uses: actions/checkout@v5
       # Builds the PWA and the binary from source and runs the webui tests
       # inside the image, so a release can never ship an unbuilt frontend.
+      #
+      # amd64 only — that is the deployment target, and building the other
+      # architectures would mean emulating a Node and Go toolchain under qemu
+      # to produce images nothing runs.
       - name: Build the image
-        run: docker build --build-arg VERSION=ci -t waxgrove:ci .
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg VERSION=ci \
+            -t waxgrove:ci .
+
+      - name: The image must be amd64
+        run: |
+          arch=$(docker image inspect waxgrove:ci --format '{{.Os}}/{{.Architecture}}')
+          test "$arch" = "linux/amd64" || { echo "::error::built $arch, want linux/amd64"; exit 1; }
+          echo "$arch"
 
   govulncheck:
     runs-on: ubuntu-latest

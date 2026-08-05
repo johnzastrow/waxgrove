@@ -212,6 +212,10 @@ non-root, and it runs fine with `--read-only`, `--cap-drop ALL` and
 `no-new-privileges` (all set in [`compose.yaml`](compose.yaml)). The health check
 is the binary probing itself, because there is no `curl` in there to do it.
 
+Images are built for **`linux/amd64` only** — that is the deployment target, and
+CI asserts the architecture rather than trusting the builder's default. Building
+on an arm64 machine emulates; `make docker` does it explicitly.
+
 The first account to register becomes the admin; everyone after that needs an
 invite code from **You → Invites**.
 

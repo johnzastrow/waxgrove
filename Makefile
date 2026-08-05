@@ -7,7 +7,7 @@ LDFLAGS := -s -w -X github.com/johnzastrow/waxgrove/internal/httpapi.Version=$(V
 # CGO off keeps the pure-Go sqlite driver and a static binary (§7).
 export CGO_ENABLED := 0
 
-.PHONY: all build test vet fmt check clean run genkey pi web web-dev web-check
+.PHONY: all build test vet fmt check clean run genkey pi web web-dev web-check docker
 
 all: check build
 
@@ -34,6 +34,14 @@ web-dev:
 web-check: web
 	@git diff --stat --exit-code -- internal/webui/dist \
 		|| (echo "internal/webui/dist is stale — run 'make web' and commit the result"; exit 1)
+
+# --- container --------------------------------------------------------------
+# amd64 only: that is the deployment target. Building on an arm64 machine
+# emulates, which is slow but produces the image that actually gets deployed.
+
+docker:
+	docker build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t waxgrove:$(VERSION) .
+	@docker image inspect waxgrove:$(VERSION) --format 'built {{.Os}}/{{.Architecture}}'
 
 # Cross-compile for a Raspberry Pi — the N1 target.
 pi:

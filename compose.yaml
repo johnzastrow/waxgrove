@@ -14,6 +14,12 @@ services:
       context: .
       args:
         VERSION: ${VERSION:-dev}
+      # amd64 only. Stated on both build and service so a build on an arm64
+      # machine produces the image that actually gets deployed, rather than one
+      # that runs locally and fails on the target host.
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
     image: waxgrove:${VERSION:-dev}
     restart: unless-stopped
 
