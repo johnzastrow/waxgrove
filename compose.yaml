@@ -1,0 +1,55 @@
+# Waxgrove — a single service. There is no database container, no cache, and
+# no reverse proxy in here: SQLite lives on the volume and TLS belongs to
+# whatever already terminates it in front of this.
+#
+# Before first run:
+#   docker compose run --rm waxgrove genkey   # prints a key
+# Put it in .env as WAXGROVE_SECRET_KEY. Without it the server refuses to
+# start, on purpose: a generated-on-boot key would mean tokens encrypted under
+# a key that vanishes on restart.
+
+services:
+  waxgrove:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: waxgrove:${VERSION:-dev}
+    restart: unless-stopped
+
+    environment:
+      WAXGROVE_ADDR: 0.0.0.0:8080
+      WAXGROVE_DB: /data/waxgrove.db
+      # Required. No default, no fallback — see internal/config/config.go.
+      WAXGROVE_SECRET_KEY: ${WAXGROVE_SECRET_KEY:?set it in .env, generate with `docker compose run --rm waxgrove genkey`}
+      WAXGROVE_ENV: ${WAXGROVE_ENV:-production}
+      # Must be https in production; used to build OAuth redirect URIs.
+      WAXGROVE_BASE_URL: ${WAXGROVE_BASE_URL:?set your public https URL in .env}
+      # MusicBrainz requires a way to reach the operator of a misbehaving
+      # instance. Set WAXGROVE_METADATA_SOURCE=none to run without one.
+      WAXGROVE_METADATA_SOURCE: ${WAXGROVE_METADATA_SOURCE:-musicbrainz}
+      WAXGROVE_CONTACT: ${WAXGROVE_CONTACT:-}
+
+    # Bound to loopback: put a TLS-terminating proxy in front rather than
+    # exposing this on the network directly.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    volumes:
+      - waxgrove-data:/data
+
+    # The image already runs as nonroot (uid 65532); these close the rest.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  waxgrove-data:

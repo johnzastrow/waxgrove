@@ -7,12 +7,33 @@ LDFLAGS := -s -w -X github.com/johnzastrow/waxgrove/internal/httpapi.Version=$(V
 # CGO off keeps the pure-Go sqlite driver and a static binary (§7).
 export CGO_ENABLED := 0
 
-.PHONY: all build test vet fmt check clean run genkey pi
+.PHONY: all build test vet fmt check clean run genkey pi web web-dev web-check
 
 all: check build
 
+# `build` deliberately does NOT depend on `web`. internal/webui/dist is
+# committed, so a checkout with no Node installed still produces a complete
+# binary. Run `make web` when the frontend changes; `make web-check` in CI
+# catches a stale commit of it.
 build:
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) $(PKG)
+
+# --- frontend ---------------------------------------------------------------
+# The PWA compiles into internal/webui/dist and is embedded by the Go build.
+
+web:
+	npm --prefix app ci
+	npm --prefix app run build
+
+# Live reload against a locally running binary (see app/vite.config.ts proxy).
+web-dev:
+	npm --prefix app install
+	npm --prefix app run dev
+
+# Fails if the committed build output does not match the current sources.
+web-check: web
+	@git diff --stat --exit-code -- internal/webui/dist \
+		|| (echo "internal/webui/dist is stale — run 'make web' and commit the result"; exit 1)
 
 # Cross-compile for a Raspberry Pi — the N1 target.
 pi:

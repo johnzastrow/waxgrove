@@ -90,10 +90,10 @@ func TestEndToEndPlaylistFlow(t *testing.T) {
 	// Add three identity-bearing tracks plus one that cannot resolve.
 	rec = c.do("POST", "/api/playlists/"+pid+"/tracks", map[string]any{
 		"candidates": []map[string]any{
-			{"Title": "Pink Moon", "Artist": "Nick Drake", "ISRC": "GBAYE0601498"},
-			{"Title": "Northern Sky", "Artist": "Nick Drake", "ISRC": "GBAYE0601499"},
-			{"Title": "Dreams", "Artist": "Fleetwood Mac", "ISRC": "USWB10101368"},
-			{"Title": "jonny", "Artist": "sparklehorse??", "Raw": "jonny — sparklehorse??"},
+			{"title": "Pink Moon", "artist": "Nick Drake", "isrc": "GBAYE0601498"},
+			{"title": "Northern Sky", "artist": "Nick Drake", "isrc": "GBAYE0601499"},
+			{"title": "Dreams", "artist": "Fleetwood Mac", "isrc": "USWB10101368"},
+			{"title": "jonny", "artist": "sparklehorse??", "raw": "jonny — sparklehorse??"},
 		},
 	})
 	if rec.Code != http.StatusOK {

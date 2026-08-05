@@ -197,9 +197,28 @@ papering over it. Anti-corporate without being shouty. Plain language, no hype.
 | [`docs/objectives.md`](docs/objectives.md) | Original project brief and goals |
 | [`docs/naming.md`](docs/naming.md) | Name selection and namespace availability research |
 
+## Running it
+
+Docker is the intended deployment. One container, one process, no sidecars —
+SQLite lives on the volume and TLS belongs to whatever terminates it in front.
+
+```bash
+docker compose run --rm waxgrove genkey     # -> put in .env as WAXGROVE_SECRET_KEY
+docker compose up -d
+```
+
+The image is `distroless/static` at roughly 25 MB: no shell, no package manager,
+non-root, and it runs fine with `--read-only`, `--cap-drop ALL` and
+`no-new-privileges` (all set in [`compose.yaml`](compose.yaml)). The health check
+is the binary probing itself, because there is no `curl` in there to do it.
+
+The first account to register becomes the admin; everyone after that needs an
+invite code from **You → Invites**.
+
 ## Development
 
-Requires Go 1.26+. The binary is static with `CGO_ENABLED=0` (pure-Go SQLite driver).
+Requires Go 1.26+. The binary is static with `CGO_ENABLED=0` (pure-Go SQLite
+driver), and the PWA is compiled into it — one artifact, nothing external to boot.
 
 ```bash
 make check          # vet + race tests + gofmt gate
@@ -210,6 +229,28 @@ export WAXGROVE_SECRET_KEY=$(go run ./cmd/waxgrove genkey)
 make run
 curl localhost:8080/health
 ```
+
+### The frontend
+
+The PWA is React + TypeScript, built by Vite into `internal/webui/dist` and
+embedded with `go:embed`.
+
+```bash
+make web            # build it -> internal/webui/dist
+make web-dev        # Vite dev server on :5173, proxying /api to a running binary
+make web-check      # fail if the committed build is stale
+```
+
+`internal/webui/dist` is **committed**. That costs a little repo churn and buys
+`go build`, `go test` and `go install` working in a checkout with no Node
+installed at all. The Docker build regenerates it from source regardless, so a
+release never ships whatever happened to be committed, and CI fails if the two
+disagree.
+
+Everything the app needs is served from the origin — fonts included — so the
+Content-Security-Policy stays `default-src 'self'` with no `unsafe-inline`
+anywhere. A test asserts that, because it is the kind of thing that erodes
+quietly.
 
 ### Configuration
 

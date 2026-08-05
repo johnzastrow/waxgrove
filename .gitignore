@@ -34,3 +34,9 @@ desktop.ini
 # GitHub Pages build output
 /site/
 slides/node_modules/
+
+# PWA
+app/node_modules/
+# internal/webui/dist is intentionally NOT ignored: it is committed so that
+# `go build` works without Node. See internal/webui/embed.go.
+app/dist/

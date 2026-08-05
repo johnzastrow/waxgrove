@@ -1,0 +1,240 @@
+/* Waxgrove PWA — analog archival, per docs/design/direction.html.
+   Mobile-first: the phone layout is the base, desktop tiers are added via
+   min-width queries (N3 — mobile-first, NOT mobile-only). */
+
+:root {
+  --wax-900:#0B0C09; --wax-800:#121410; --wax-700:#1A1D17;
+  --wax-600:#242820; --wax-500:#31362B;
+  --grove-800:#1B2719; --grove-600:#2C4029; --grove-500:#3D5638; --grove-300:#7A9670;
+  --cream-100:#F4EEDE; --cream-200:#E5DCC5; --cream-300:#CFC3A5;
+  --copper:#C07B45; --copper-br:#DFA063; --ember:#A8512A; --warn:#C9A227;
+
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --rail: 208px;
+  /* Respect the notch and home indicator on iOS. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  background: var(--wax-900);
+  color: var(--cream-200);
+  font-family: var(--ui);
+  font-size: 16px;               /* never below 16px: iOS zooms smaller inputs */
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  min-height: 100dvh;
+}
+
+a { color: var(--copper-br); }
+:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ------------------------------------------------------------- app shell -- */
+
+#app { display: flex; flex-direction: column; min-height: 100dvh; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  padding: calc(.7rem + var(--safe-top)) 1rem .7rem;
+  background: var(--wax-800);
+  border-bottom: 1px solid var(--wax-700);
+  display: flex; align-items: center; gap: .7rem;
+}
+.topbar h1 {
+  font-family: var(--display); font-size: 1.15rem; font-weight: 500;
+  color: var(--cream-100); letter-spacing: -.01em;
+}
+.topbar .sub {
+  font-family: var(--mono); font-size: .62rem; letter-spacing: .09em;
+  color: var(--cream-300); opacity: .7;
+}
+.topbar .spacer { margin-left: auto; }
+
+main { flex: 1; padding: 1rem; padding-bottom: 5.5rem; }
+
+/* Bottom navigation on phones; becomes a side rail on desktop. */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; background: var(--wax-800);
+  border-top: 1px solid var(--wax-700);
+  padding-bottom: var(--safe-bottom);
+}
+.nav a {
+  flex: 1; text-align: center; padding: .6rem .2rem .7rem;
+  text-decoration: none; color: var(--cream-300);
+  font-size: .68rem; font-family: var(--mono); letter-spacing: .06em;
+  text-transform: uppercase;
+  display: flex; flex-direction: column; align-items: center; gap: .25rem;
+  min-height: 48px;                       /* touch target */
+}
+.nav a[aria-current="page"] { color: var(--copper-br); }
+.nav a[aria-current="page"] .dot { background: var(--copper); }
+.nav .dot { width: 4px; height: 4px; border-radius: 50%; background: transparent; }
+
+/* ---------------------------------------------------------------- pieces -- */
+
+.eyebrow {
+  font-family: var(--mono); font-size: .6rem; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--copper); margin-bottom: .5rem;
+}
+.card {
+  border: 1px solid var(--wax-600); border-radius: 4px;
+  background: var(--wax-800); padding: 1rem;
+}
+.card + .card { margin-top: .7rem; }
+.card.good { border-color: var(--grove-500); background: rgba(61,86,56,.13); }
+.card.warn { border-left: 2px solid var(--ember); background: rgba(168,81,42,.09); }
+.muted { color: var(--cream-300); }
+.mono  { font-family: var(--mono); }
+.small { font-size: .8rem; }
+
+h2 { font-family: var(--display); font-weight: 500; font-size: 1.5rem; color: var(--cream-100); }
+h3 { font-size: 1rem; color: var(--cream-100); font-weight: 600; }
+
+/* Inputs must be >=16px or iOS zooms on focus. */
+input, button, select, textarea { font: inherit; font-size: 1rem; }
+input[type="text"], input[type="email"], input[type="password"], input[type="search"] {
+  width: 100%; padding: .7rem .8rem; min-height: 48px;
+  background: var(--wax-700); color: var(--cream-100);
+  border: 1px solid var(--wax-600); border-radius: 3px;
+}
+input::placeholder { color: var(--cream-300); opacity: .55; }
+label { display: block; margin-top: .8rem; }
+label .lbl {
+  display: block; font-family: var(--mono); font-size: .6rem; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--cream-300); margin-bottom: .3rem;
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  min-height: 48px; padding: .7rem 1.1rem;
+  background: var(--grove-600); color: var(--cream-100);
+  border: 1px solid transparent; border-radius: 3px;
+  font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.btn:hover { background: var(--grove-500); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.ghost { background: transparent; border-color: var(--wax-600); color: var(--cream-300); }
+.btn.ghost:hover { border-color: var(--grove-500); background: transparent; }
+.btn.danger { background: transparent; border-color: var(--ember); color: var(--copper-br); }
+.btn.sm { min-height: 36px; padding: .35rem .7rem; font-size: .82rem; flex: 0 0 auto; }
+.btn.block { width: 100%; }
+.row-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+
+/* ----------------------------------------------------------- record rows -- */
+
+.rows { list-style: none; }
+.rows li {
+  display: flex; align-items: center; gap: .7rem;
+  padding: .65rem .1rem; border-bottom: 1px solid var(--wax-700);
+}
+.rows li:last-child { border-bottom: none; }
+/* The three lines of a row stack. They are spans so the row stays one flex
+   child; without an explicit column they would run together inline. */
+.rows .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rows .ti {
+  font-size: .95rem; color: var(--cream-100); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rows .ar {
+  font-size: .8rem; color: var(--cream-300); opacity: .85;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rows .isrc {
+  font-family: var(--mono); font-size: .62rem; color: var(--grove-300); opacity: .85;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ring { flex: 0 0 auto; }
+
+.badge {
+  flex: 0 0 auto; align-self: center;
+  font-family: var(--mono); font-size: .58rem; letter-spacing: .08em;
+  text-transform: uppercase; padding: .15rem .4rem; border-radius: 2px;
+  border: 1px solid var(--wax-600); color: var(--cream-300); white-space: nowrap;
+}
+.badge.g { border-color: var(--grove-500); color: var(--grove-300); }
+.badge.w { border-color: var(--warn); color: var(--warn); }
+
+.empty { text-align: center; padding: 2.5rem 1rem; color: var(--cream-300); }
+.empty svg { opacity: .5; margin-bottom: .8rem; }
+
+/* -------------------------------------------------------------- feedback -- */
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(5rem + var(--safe-bottom)); z-index: 40;
+  background: var(--wax-700); border: 1px solid var(--wax-500);
+  border-left: 2px solid var(--grove-500);
+  padding: .7rem 1rem; border-radius: 3px; max-width: min(92vw, 30rem);
+  font-size: .88rem; color: var(--cream-100);
+  box-shadow: 0 12px 34px -12px #000;
+}
+.toast.bad { border-left-color: var(--ember); }
+
+.spinner {
+  width: 1em; height: 1em; border-radius: 50%;
+  border: 2px solid var(--wax-500); border-top-color: var(--copper);
+  animation: spin .7s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.err { color: var(--copper-br); font-size: .85rem; margin-top: .6rem; }
+
+/* --------------------------------------------------------- desktop tiers -- */
+/* Panes are progressively revealed rather than layouts rewritten; every
+   desktop pane exists on the phone as its own screen. */
+
+@media (min-width: 700px) {
+  main { padding: 1.5rem; max-width: 60rem; margin: 0 auto; width: 100%; }
+}
+
+@media (min-width: 1100px) {
+  #app { flex-direction: row; }
+  .topbar {
+    position: fixed; top: 0; bottom: 0; left: 0; width: var(--rail);
+    flex-direction: column; align-items: stretch; gap: .3rem;
+    border-bottom: none; border-right: 1px solid var(--wax-700);
+    padding: 1.1rem .8rem;
+  }
+  .topbar .brand { padding: 0 .3rem .9rem;
+    border-bottom: 1px solid var(--wax-700); margin-bottom: .5rem; }
+  /* The tagline does not fit the rail at full tracking, and wrapping it reads
+     as a layout bug rather than a subtitle. */
+  .topbar .brand .sub { font-size: .52rem; letter-spacing: .05em; }
+  .topbar .spacer { margin-left: 0; flex: 1; }
+
+  /* The bottom bar becomes the rail's navigation. */
+  .nav {
+    position: static; flex-direction: column; border-top: none;
+    background: transparent; padding-bottom: 0;
+  }
+  .nav a {
+    flex: none; flex-direction: row; justify-content: flex-start; gap: .6rem;
+    text-align: left; padding: .55rem .6rem; border-radius: 3px;
+    font-size: .8rem; text-transform: none; letter-spacing: 0;
+    font-family: var(--ui);
+  }
+  .nav a[aria-current="page"] { background: var(--grove-800); color: var(--cream-100); font-weight: 600; }
+  .nav .dot { width: 5px; height: 5px; }
+
+  main { margin-left: var(--rail); padding: 2rem 2.5rem; padding-bottom: 2rem; max-width: 68rem; }
+  .toast { bottom: 1.5rem; left: auto; right: 1.5rem; transform: none; }
+}
+
+/* Two-pane add-to-playlist: search left, staged right. No phone equivalent —
+   this is the layout desktop actually earns (see design/desktop.html). */
+@media (min-width: 1100px) {
+  .two-pane { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+}

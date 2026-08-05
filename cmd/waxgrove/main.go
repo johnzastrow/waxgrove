@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,20 +22,58 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/musicbrainz"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
+	"github.com/johnzastrow/waxgrove/internal/webui"
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "genkey" {
-		if err := genkey(); err != nil {
-			fmt.Fprintln(os.Stderr, "genkey:", err)
-			os.Exit(1)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "genkey":
+			if err := genkey(); err != nil {
+				fmt.Fprintln(os.Stderr, "genkey:", err)
+				os.Exit(1)
+			}
+			return
+		case "healthcheck":
+			if err := healthcheck(); err != nil {
+				fmt.Fprintln(os.Stderr, "healthcheck:", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+}
+
+// healthcheck probes the running server from inside its own container.
+//
+// The production image is distroless: there is no curl, no wget, and no shell,
+// so the binary has to be able to check itself. It probes 127.0.0.1 explicitly
+// rather than "localhost" — that name can resolve to ::1 first, and a server
+// bound only to IPv4 then fails a health check while serving traffic perfectly.
+func healthcheck() error {
+	addr := os.Getenv("WAXGROVE_ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:8080"
+	}
+	// A listen address of 0.0.0.0:8080 or :8080 is not a dial address.
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		addr = "127.0.0.1" + addr[i:]
+	}
+
+	client := &http.Client{Timeout: 4 * time.Second}
+	resp, err := client.Get("http://" + addr + "/health")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // genkey prints a fresh AES-256 key for the operator to put in the
@@ -107,9 +146,19 @@ func run() error {
 		Secure:   cfg.Environment == "production",
 	}
 
+	// The PWA is served from the same binary and the same origin, which is what
+	// lets the session cookie be HttpOnly + SameSite=Lax with no CORS at all.
+	web, err := webui.Handler()
+	if err != nil {
+		return fmt.Errorf("web ui: %w", err)
+	}
+	if !webui.Built() {
+		slog.Warn("serving a placeholder web ui; run `make web` to build the app")
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.New(store, cfg.Environment).WithAPI(api).Routes(),
+		Handler:           httpapi.New(store, cfg.Environment).WithAPI(api).WithWebUI(web).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

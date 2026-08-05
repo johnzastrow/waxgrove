@@ -68,19 +68,24 @@ const ConfidenceThreshold = 0.85
 
 // Candidate is an unresolved song reference from any source adapter (§3.3).
 // Everything a source can offer is optional except that something identifies it.
+//
+// The JSON tags are part of the public API: candidates travel over the wire in
+// both directions (posted to add tracks, returned as unresolved items and as
+// disambiguation alternatives), so they use the same snake_case shape as every
+// other view rather than defaulting to Go field names.
 type Candidate struct {
-	Title      string
-	Artist     string
-	Album      string
-	DurationMS int
-	ISRC       string
-	MBID       string
-	Year       int
+	Title      string `json:"title,omitempty"`
+	Artist     string `json:"artist,omitempty"`
+	Album      string `json:"album,omitempty"`
+	DurationMS int    `json:"duration_ms,omitempty"`
+	ISRC       string `json:"isrc,omitempty"`
+	MBID       string `json:"mbid,omitempty"`
+	Year       int    `json:"year,omitempty"`
 	// Raw is the original text for free-text sources, preserved so an
 	// unresolved item is never silently dropped (BR-5).
-	Raw string
+	Raw string `json:"raw,omitempty"`
 	// SourceRef names the adapter that produced this candidate.
-	SourceRef string
+	SourceRef string `json:"source_ref,omitempty"`
 }
 
 // User is an instance member.

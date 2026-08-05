@@ -1,0 +1,145 @@
+/* View-specific styling. base.css holds the design tokens and the shell;
+   this file holds everything only one or two screens need. */
+
+/* ------------------------------------------------------------------- boot -- */
+
+.boot {
+  min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .6rem;
+}
+
+.inline-note { display: flex; gap: .5rem; align-items: center; }
+
+/* ------------------------------------------------------------------- gate -- */
+/* Sign-in and registration. The one screen with no chrome around it. */
+
+.gate {
+  min-height: 100dvh; display: flex; flex-direction: column; justify-content: center;
+  gap: 1.2rem; padding: 2rem 1.1rem calc(2rem + var(--safe-bottom));
+  max-width: 27rem; margin: 0 auto; width: 100%;
+}
+.gate-mark { text-align: center; }
+.gate-mark .ring { margin: 0 auto; display: block; }
+.wordmark {
+  font-family: var(--display); font-weight: 400; font-size: 2rem;
+  color: var(--cream-100); letter-spacing: -.02em; margin-top: .5rem;
+}
+.gate-mark .sub {
+  font-size: .58rem; letter-spacing: .22em; color: var(--copper);
+  font-family: var(--mono);
+}
+.switch { margin-top: .9rem; text-align: center; }
+.linkish {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--copper-br); text-decoration: underline; font-size: inherit;
+}
+.gate-foot { text-align: center; text-wrap: balance; }
+
+/* ------------------------------------------------------------------ brand -- */
+
+.topbar .brand { display: flex; align-items: center; gap: .55rem; }
+.topbar .brand > span { display: flex; flex-direction: column; line-height: 1.15; }
+
+/* ----------------------------------------------------------------- search -- */
+
+.search-input { margin: .3rem 0 1rem; }
+.note { margin: .6rem 0; }
+
+.staged .rows li { border-bottom-color: rgba(122,150,112,.22); }
+.picker { margin-top: 0; flex: 1; min-width: 12rem; }
+.picker select {
+  width: 100%; min-height: 48px; padding: .6rem .7rem;
+  background: var(--wax-700); color: var(--cream-100);
+  border: 1px solid var(--wax-600); border-radius: 3px;
+}
+
+/* ------------------------------------------------------------ unresolved -- */
+
+.unresolved { list-style: none; margin-top: .8rem; }
+.unresolved-item { padding: .7rem 0; border-top: 1px solid rgba(168,81,42,.28); }
+.unresolved-head { display: flex; align-items: flex-start; gap: .7rem; }
+.unresolved-head .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.unresolved-head .ti { color: var(--cream-100); font-weight: 500; }
+.unresolved-head .ar { font-size: .8rem; color: var(--cream-300); }
+.unresolved-head .isrc {
+  font-family: var(--mono); font-size: .62rem; color: var(--copper); margin-top: .15rem;
+}
+.alts { margin: .6rem 0 0 2rem; border-left: 1px solid var(--wax-600); padding-left: .8rem; }
+
+/* ------------------------------------------------------------------ shelf -- */
+
+.newlist label { margin-top: 0; }
+.hidden-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.shelf { list-style: none; display: grid; gap: .6rem; }
+.shelf-item {
+  display: flex; align-items: center; gap: .8rem; text-decoration: none;
+  border: 1px solid var(--wax-600); border-radius: 4px;
+  background: var(--wax-800); padding: .85rem 1rem; color: inherit;
+  min-height: 56px;
+}
+.shelf-item:hover { border-color: var(--grove-500); }
+.shelf-item .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shelf-item .ti {
+  font-family: var(--display); font-size: 1.05rem; font-weight: 500; color: var(--cream-100);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.shelf-item .ar { font-size: .76rem; color: var(--cream-300); font-family: var(--mono); }
+
+@media (min-width: 700px) {
+  .shelf { grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+}
+
+/* --------------------------------------------------------- playlist view -- */
+
+.tabs { display: flex; gap: .3rem; margin: 1.1rem 0 .4rem; border-bottom: 1px solid var(--wax-700); }
+.tab {
+  background: none; border: none; cursor: pointer;
+  padding: .55rem .8rem; min-height: 44px;
+  color: var(--cream-300); font-size: .85rem;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab.on { color: var(--cream-100); border-bottom-color: var(--copper); font-weight: 600; }
+
+.numbered .pos { font-size: .68rem; color: var(--cream-300); opacity: .7; min-width: 1.6rem; }
+
+.history { list-style: none; margin-top: .6rem; }
+.history li {
+  display: flex; gap: .8rem; align-items: flex-start;
+  padding: .6rem 0; border-bottom: 1px solid var(--wax-700);
+}
+.history li:last-child { border-bottom: none; }
+.history .rev { font-size: .68rem; color: var(--copper); padding-top: .15rem; min-width: 2.2rem; }
+.history .meta { display: flex; flex-direction: column; min-width: 0; }
+.history .ti { color: var(--cream-100); font-size: .9rem; }
+.history .ar { color: var(--cream-300); font-size: .78rem; }
+.history .isrc { font-family: var(--mono); font-size: .62rem; color: var(--cream-300); opacity: .6; }
+
+/* --------------------------------------------------------------- settings -- */
+
+.facts { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; font-size: .9rem; }
+.facts dt {
+  font-family: var(--mono); font-size: .6rem; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--cream-300); align-self: center;
+}
+.facts dd { color: var(--cream-100); overflow-wrap: anywhere; }
+
+.invite {
+  display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+  margin-top: .8rem; padding: .7rem .8rem;
+  background: var(--wax-700); border: 1px dashed var(--grove-500); border-radius: 3px;
+  color: var(--copper-br); font-size: .95rem; letter-spacing: .05em;
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------- empty -- */
+
+.empty h3 { margin-top: .6rem; }
+.empty p { margin-top: .4rem; text-wrap: balance; }
+
+/* ---------------------------------------------------------- update toast -- */
+
+.toast.update {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  border-left-color: var(--copper);
+}

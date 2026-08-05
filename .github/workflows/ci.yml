@@ -39,6 +39,45 @@ jobs:
       - name: Cross-compile for Raspberry Pi (N1)
         run: GOOS=linux GOARCH=arm64 go build -trimpath ./cmd/waxgrove
 
+  # internal/webui/dist is committed so `go build` works without Node. That is
+  # only safe if it actually matches app/ — this job is what makes it so.
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm --prefix app ci
+
+      - name: Type check
+        run: npm --prefix app run typecheck
+
+      - name: Build
+        run: npm --prefix app run build
+
+      - name: The committed build must match the sources
+        run: |
+          if ! git diff --quiet -- internal/webui/dist; then
+            echo "::error::internal/webui/dist is stale. Run 'make web' and commit the result."
+            git diff --stat -- internal/webui/dist
+            exit 1
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Builds the PWA and the binary from source and runs the webui tests
+      # inside the image, so a release can never ship an unbuilt frontend.
+      - name: Build the image
+        run: docker build --build-arg VERSION=ci -t waxgrove:ci .
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:

@@ -384,18 +384,29 @@ func (a *API) removeTrack(w http.ResponseWriter, r *http.Request, u *domain.User
 	writeJSON(w, http.StatusOK, playlistView(updated))
 }
 
+// history returns the append-only content log. Annotations never appear here —
+// only changes to what the playlist *is* produce a revision (BR-3).
 func (a *API) history(w http.ResponseWriter, r *http.Request, _ *domain.User) {
 	revs, err := a.Store.Playlists().History(r.Context(), r.PathValue("id"))
 	if err != nil {
 		internal(w, "history", err)
 		return
 	}
+	// Resolve actors to display names once each. A history is a human-readable
+	// log, so returning opaque IDs would push this lookup onto every client.
+	names := make(map[string]string, 4)
 	out := make([]map[string]any, 0, len(revs))
 	for _, v := range revs {
-		actor := v.ActorID
-		if actor == "" {
+		actor, ok := names[v.ActorID]
+		if !ok {
 			// BR-4: the author was erased; the history itself survives.
 			actor = "a departed member"
+			if v.ActorID != "" {
+				if u, err := a.Store.Users().Get(r.Context(), v.ActorID); err == nil {
+					actor = u.DisplayName
+				}
+			}
+			names[v.ActorID] = actor
 		}
 		out = append(out, map[string]any{
 			"rev": v.Rev, "op": v.Op, "actor": actor,
