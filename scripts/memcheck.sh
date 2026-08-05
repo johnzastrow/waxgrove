@@ -70,13 +70,23 @@ read_anon() {
 
 mib() { awk -v b="${1:-0}" 'BEGIN{printf "%.1f", b/1048576}'; }
 
+# Build once, up front. Without this the scenarios below run whatever image
+# happens to be lying around, which silently measures the previous version of
+# the code — the single most misleading thing this script could do.
+build_image() {
+  say "Building the image from the current tree"
+  docker compose build >/dev/null 2>&1 \
+    || { echo "docker compose build failed" >&2; exit 1; }
+  note "built"
+}
+
 # A fresh container per scenario, so the cgroup's peak belongs to that scenario
 # alone. memory.peak is not resettable without root, which is why this is a
 # restart rather than a counter reset.
 restart_clean() {
   docker compose down -v >/dev/null 2>&1
   WAXGROVE_MEM_LIMIT="$LIMIT" WAXGROVE_HOST_PORT="$PORT" \
-    docker compose up -d >/dev/null 2>&1 || { echo "compose up failed" >&2; exit 1; }
+    docker compose up -d --no-build >/dev/null 2>&1 || { echo "compose up failed" >&2; exit 1; }
   for _ in $(seq 1 60); do
     curl -fsS "$BASE/health" >/dev/null 2>&1 && return 0
     sleep 0.5
@@ -222,6 +232,8 @@ scenario() {
 say "Waxgrove memory check   limit=$LIMIT  port=$PORT"
 note "anon = unreclaimable, the figure that decides host sizing"
 note "cgroup peak includes page cache, which is reclaimable"
+
+build_image
 echo
 
 # Search needs something to search, so it seeds first and measures both.
