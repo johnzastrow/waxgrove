@@ -101,7 +101,15 @@
 }
 .tab.on { color: var(--cream-100); border-bottom-color: var(--copper); font-weight: 600; }
 
-.numbered .pos { font-size: .68rem; color: var(--cream-300); opacity: .7; min-width: 1.6rem; }
+/* The position belongs at the left edge of a numbered list. SongRow renders
+   the badge slot after the metadata, which is right for "local"/"new to the
+   grove" tags but wrong for an index — so this one moves to the front rather
+   than the component growing another slot. */
+.numbered .pos {
+  order: -1;
+  font-size: .68rem; color: var(--cream-300); opacity: .7;
+  min-width: 1.5rem; text-align: right;
+}
 
 .rename { margin: .3rem 0 .8rem; }
 .rename label { margin-top: 0; }
