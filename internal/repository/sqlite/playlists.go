@@ -93,11 +93,32 @@ func (r *PlaylistRepo) Get(ctx context.Context, id string) (*domain.Playlist, er
 		return nil, err
 	}
 
-	recs := r.s.Records()
+	// One batch rather than a query per track. A 100-track playlist was costing
+	// 201 queries to render, and this is the path every playlist view takes.
+	//
+	// The cursor above is fully drained before this runs, which is what
+	// releases its pooled connection — see scanIDs in records.go for why that
+	// ordering is load-bearing rather than stylistic.
+	ids := make([]string, len(slots))
+	for i, s := range slots {
+		ids[i] = s.recordID
+	}
+	recs, err := r.s.Records().getMany(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]*domain.Record, len(recs))
+	for i := range recs {
+		byID[recs[i].ID] = &recs[i]
+	}
 	for _, s := range slots {
-		rec, err := recs.Get(ctx, s.recordID)
-		if err != nil {
-			return nil, err
+		rec, ok := byID[s.recordID]
+		if !ok {
+			// A track pointing at a record that no longer exists would mean the
+			// foreign key was bypassed. Surface it rather than silently
+			// shortening the playlist.
+			return nil, fmt.Errorf("playlist %s position %d references missing record %s",
+				p.ID, s.pos, s.recordID)
 		}
 		p.Tracks = append(p.Tracks, domain.Track{Position: s.pos, Record: *rec, AddedInRev: s.rev})
 	}
