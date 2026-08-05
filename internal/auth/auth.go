@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -41,10 +42,19 @@ var (
 const MinPasswordLen = 12
 
 // HashPassword returns a PHC-formatted Argon2id hash, salt included.
-func HashPassword(password string) (string, error) {
+//
+// It takes a context because hashing is rate-limited by a slot the caller may
+// have to wait for (see MaxConcurrentHashes) — a cancelled request should stop
+// queueing rather than hold a slot nobody is waiting on.
+func HashPassword(ctx context.Context, password string) (string, error) {
 	if len([]rune(password)) < MinPasswordLen {
 		return "", ErrWeak
 	}
+	if err := acquireHashSlot(ctx); err != nil {
+		return "", err
+	}
+	defer releaseHashSlot()
+
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
@@ -59,7 +69,7 @@ func HashPassword(password string) (string, error) {
 }
 
 // VerifyPassword checks a password against a stored hash in constant time.
-func VerifyPassword(password, encoded string) error {
+func VerifyPassword(ctx context.Context, password, encoded string) error {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return ErrInvalidHash
@@ -83,7 +93,11 @@ func VerifyPassword(password, encoded string) error {
 		return ErrInvalidHash
 	}
 
+	if err := acquireHashSlot(ctx); err != nil {
+		return err
+	}
 	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want)))
+	releaseHashSlot()
 	noteHash()
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return ErrMismatch
@@ -109,7 +123,7 @@ func init() {
 	// Generated once at startup so it is guaranteed well-formed and matches the
 	// current cost parameters. A hand-written constant risks being malformed,
 	// which would make the comparison fast and defeat the purpose.
-	h, err := HashPassword("waxgrove-timing-equalisation-placeholder")
+	h, err := HashPassword(context.Background(), "waxgrove-timing-equalisation-placeholder")
 	if err != nil {
 		panic("auth: cannot build timing placeholder: " + err.Error())
 	}
@@ -121,6 +135,6 @@ func init() {
 // Call it on the "no such account" path so a failed lookup and a failed
 // password take comparable time, and the response cannot be used to enumerate
 // which addresses are registered.
-func EqualiseTiming(password string) {
-	_ = VerifyPassword(password, dummyHash)
+func EqualiseTiming(ctx context.Context, password string) {
+	_ = VerifyPassword(ctx, password, dummyHash)
 }

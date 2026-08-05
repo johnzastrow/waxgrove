@@ -50,6 +50,7 @@ export function PlaylistDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState<'tracks' | 'history'>('tracks')
   const [history, setHistory] = useState<Revision[] | null>(null)
+  const [editing, setEditing] = useState(false)
 
   const load = useCallback((signal?: AbortSignal) => {
     api.playlist(id, signal)
@@ -76,6 +77,48 @@ export function PlaylistDetail({ id }: { id: string }) {
   }, [tab, history, id])
 
   const owned = !!playlist && !!user && playlist.owner_id === user.id
+
+  // Move-up/down rather than drag-and-drop. On a phone, drag competes with
+  // scrolling and needs a library to feel right; buttons work on touch, with a
+  // mouse, and from the keyboard, for a fraction of the code.
+  const move = async (from: number, to: number) => {
+    if (!playlist || to < 0 || to >= playlist.tracks.length) return
+    const ids = playlist.tracks.map((t) => t.record.id)
+    const [moved] = ids.splice(from, 1)
+    if (moved === undefined) return
+    ids.splice(to, 0, moved)
+
+    setBusy(true)
+    try {
+      setPlaylist(await api.reorderTracks(id, ids))
+      setHistory(null)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Someone else changed it underneath us; showing the truth beats
+        // retrying against a list that no longer exists.
+        toast({ message: 'This playlist changed elsewhere — reloading.', bad: true })
+        load()
+      } else {
+        toast({ message: err instanceof ApiError ? err.message : 'could not reorder', bad: true })
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const rename = async (title: string) => {
+    setBusy(true)
+    try {
+      setPlaylist(await api.renamePlaylist(id, title))
+      setHistory(null)
+      setEditing(false)
+      toast({ message: 'Renamed.' })
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not rename', bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const removeTrack = async (position: number) => {
     setBusy(true)
@@ -116,14 +159,41 @@ export function PlaylistDetail({ id }: { id: string }) {
       <p className="eyebrow">
         <Link to="/playlists">Playlists</Link> · revision {playlist.revision}
       </p>
-      <h2>{playlist.title}</h2>
-      {playlist.description && <p className="muted">{playlist.description}</p>}
+      {editing ? (
+        <form
+          className="rename"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const value = new FormData(e.currentTarget).get('title')
+            if (typeof value === 'string' && value.trim()) void rename(value.trim())
+          }}
+        >
+          <label>
+            <span className="lbl">Playlist title</span>
+            <input name="title" defaultValue={playlist.title} autoFocus required />
+          </label>
+          <div className="row-actions">
+            <button type="submit" className="btn" disabled={busy}>Save</button>
+            <button type="button" className="btn ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <h2>{playlist.title}</h2>
+      )}
+      {playlist.description && !editing && <p className="muted">{playlist.description}</p>}
 
       <div className="row-actions">
         <a className="btn ghost" href={api.exportURL(playlist.id)} download>
           Export JSPF
         </a>
         <Link to="/" className="btn ghost">Add songs</Link>
+        {owned && !editing && (
+          <button type="button" className="btn ghost" onClick={() => setEditing(true)}>
+            Rename
+          </button>
+        )}
         {owned && (
           <button
             type="button" className="btn danger" disabled={busy}
@@ -158,20 +228,38 @@ export function PlaylistDetail({ id }: { id: string }) {
           </Empty>
         ) : (
           <ul className="rows numbered">
-            {playlist.tracks.map((t) => (
+            {playlist.tracks.map((t, i) => (
               <SongRow
                 key={`${t.position}-${t.record.id}`}
                 record={t.record}
                 badge={<span className="pos mono">{String(t.position + 1).padStart(2, '0')}</span>}
                 {...(owned ? {
                   action: (
-                    <button
-                      type="button" className="btn sm ghost" disabled={busy}
-                      aria-label={`Remove ${t.record.title}`}
-                      onClick={() => void removeTrack(t.position)}
-                    >
-                      Remove
-                    </button>
+                    <span className="track-actions">
+                      <button
+                        type="button" className="btn sm ghost icon"
+                        disabled={busy || i === 0}
+                        aria-label={`Move ${t.record.title} up`}
+                        onClick={() => void move(i, i - 1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button" className="btn sm ghost icon"
+                        disabled={busy || i === playlist.tracks.length - 1}
+                        aria-label={`Move ${t.record.title} down`}
+                        onClick={() => void move(i, i + 1)}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button" className="btn sm ghost" disabled={busy}
+                        aria-label={`Remove ${t.record.title}`}
+                        onClick={() => void removeTrack(t.position)}
+                      >
+                        Remove
+                      </button>
+                    </span>
                   ),
                 } : {})}
               />

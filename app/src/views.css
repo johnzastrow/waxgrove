@@ -103,6 +103,25 @@
 
 .numbered .pos { font-size: .68rem; color: var(--cream-300); opacity: .7; min-width: 1.6rem; }
 
+.rename { margin: .3rem 0 .8rem; }
+.rename label { margin-top: 0; }
+
+/* Reorder controls. Buttons rather than drag: on a phone, dragging competes
+   with scrolling, and these work from the keyboard for free. */
+.track-actions { display: flex; gap: .3rem; align-items: center; flex: 0 0 auto; }
+.btn.icon {
+  min-width: 36px; padding: .35rem .5rem;
+  font-size: 1rem; line-height: 1; font-weight: 400;
+}
+.btn.icon:disabled { opacity: .25; }
+
+/* Below the narrowest layout the three controls crowd the title, so the
+   labelled action wraps under the arrows. */
+@media (max-width: 400px) {
+  .numbered li { flex-wrap: wrap; }
+  .numbered .track-actions { margin-left: auto; }
+}
+
 .history { list-style: none; margin-top: .6rem; }
 .history li {
   display: flex; gap: .8rem; align-items: flex-start;

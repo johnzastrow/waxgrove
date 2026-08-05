@@ -37,7 +37,7 @@ func (r *UserRepo) Register(ctx context.Context, email, displayName, password, i
 	if email == "" || displayName == "" {
 		return nil, errors.New("sqlite: email and display name are required")
 	}
-	hash, err := auth.HashPassword(password)
+	hash, err := auth.HashPassword(ctx, password)
 	if err != nil {
 		return nil, err // includes ErrWeak
 	}
@@ -136,17 +136,17 @@ func (r *UserRepo) Authenticate(ctx context.Context, email, password string) (*d
 	if errors.Is(err, sql.ErrNoRows) {
 		// Spend comparable time on an unknown account so timing does not leak
 		// whether the address exists.
-		auth.EqualiseTiming(password)
+		auth.EqualiseTiming(ctx, password)
 		return nil, ErrCredentials
 	}
 	if err != nil {
 		return nil, err
 	}
 	if deleted.Valid || hash == "" {
-		auth.EqualiseTiming(password)
+		auth.EqualiseTiming(ctx, password)
 		return nil, ErrCredentials
 	}
-	if err := auth.VerifyPassword(password, hash); err != nil {
+	if err := auth.VerifyPassword(ctx, password, hash); err != nil {
 		return nil, ErrCredentials
 	}
 	return r.Get(ctx, id)

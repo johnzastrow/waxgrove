@@ -206,21 +206,11 @@ func (r *RecordRepo) Search(ctx context.Context, query string, limit int) ([]dom
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var out []domain.Record
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		rec, err := r.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *rec)
+	ids, err := scanIDs(rows)
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	return r.getMany(ctx, ids)
 }
 
 // ftsQuery turns free user input into a safe FTS5 prefix query. FTS5 has its
@@ -252,21 +242,126 @@ func (r *RecordRepo) FuzzyMatch(ctx context.Context, c domain.Candidate) ([]doma
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	ids, err := scanIDs(rows)
+	if err != nil {
+		return nil, err
+	}
+	return r.getMany(ctx, ids)
+}
 
-	var out []domain.Record
+// scanIDs drains an id cursor completely and closes it.
+//
+// Draining before doing anything else is not a style preference, it is what
+// keeps the pool from deadlocking: an open cursor holds its connection, so a
+// per-row query issued inside the loop needs a second one. With N concurrent
+// searches against a pool of N, every connection ends up held by a cursor
+// waiting for a connection, and nothing ever completes. That is a permanent
+// hang, not a slowdown — the health check goes red and stays red.
+func scanIDs(rows *sql.Rows) ([]string, error) {
+	defer func() { _ = rows.Close() }()
+	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		rec, err := r.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *rec)
+		ids = append(ids, id)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, rows.Close()
+}
+
+// getMany loads records by id, preserving the order it was given — callers
+// have already ranked them and that ranking is the answer.
+//
+// Two queries total rather than the 1+2N a per-id loop would cost. That matters
+// less on local SQLite than the deadlock above, but a 50-result search issuing
+// 101 queries is worth not doing.
+func (r *RecordRepo) getMany(ctx context.Context, ids []string) ([]domain.Record, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	ph := placeholders(len(ids))
+
+	rows, err := r.s.Reader().QueryContext(ctx, `
+		SELECT id, mbid, title, artist_credit, album, duration_ms, year,
+		       norm_title, norm_artist, tier, created_at, updated_at
+		  FROM records WHERE id IN (`+ph+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]*domain.Record, len(ids))
+	if err := func() error {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var rec domain.Record
+			var mbid, album sql.NullString
+			var dur, year sql.NullInt64
+			var created, updated string
+			if err := rows.Scan(&rec.ID, &mbid, &rec.Title, &rec.ArtistCredit, &album,
+				&dur, &year, &rec.NormTitle, &rec.NormArtist, &rec.Tier,
+				&created, &updated); err != nil {
+				return err
+			}
+			rec.MBID, rec.Album = mbid.String, album.String
+			rec.DurationMS, rec.Year = int(dur.Int64), int(year.Int64)
+			rec.CreatedAt, _ = time.Parse(time.RFC3339, created)
+			rec.UpdatedAt, _ = time.Parse(time.RFC3339, updated)
+			byID[rec.ID] = &rec
+		}
+		return rows.Err()
+	}(); err != nil {
+		return nil, err
+	}
+
+	// ISRCs for the whole set in one pass. A record has a set of them (BR-1),
+	// so this is a join, not a lookup.
+	isrcRows, err := r.s.Reader().QueryContext(ctx,
+		`SELECT record_id, isrc FROM record_isrcs
+		  WHERE record_id IN (`+ph+`) ORDER BY isrc`, args...)
+	if err != nil {
+		return nil, err
+	}
+	if err := func() error {
+		defer func() { _ = isrcRows.Close() }()
+		for isrcRows.Next() {
+			var rid, isrc string
+			if err := isrcRows.Scan(&rid, &isrc); err != nil {
+				return err
+			}
+			if rec := byID[rid]; rec != nil {
+				rec.ISRCs = append(rec.ISRCs, isrc)
+			}
+		}
+		return isrcRows.Err()
+	}(); err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.Record, 0, len(ids))
+	for _, id := range ids {
+		if rec := byID[id]; rec != nil {
+			out = append(out, *rec)
+		}
+	}
+	return out, nil
+}
+
+// placeholders builds "?, ?, ?" for an IN clause. The count comes from a slice
+// length we control, never from user input, and every value is still bound —
+// this constructs the shape of the query, not any part of its data.
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
 // RecordProvenance notes that a user deliberately contributed a record.

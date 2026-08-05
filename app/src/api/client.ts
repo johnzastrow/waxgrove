@@ -106,6 +106,21 @@ export const api = {
   playlist: (id: string, signal?: AbortSignal) =>
     request<Playlist>(`/api/playlists/${encodeURIComponent(id)}`, signal ? { signal } : {}),
 
+  renamePlaylist: (id: string, title: string) =>
+    request<Playlist>(`/api/playlists/${encodeURIComponent(id)}`, {
+      method: 'PATCH', body: { title },
+    }),
+
+  /**
+   * Replace the ordering. The list must hold exactly the records the playlist
+   * already has — the server answers 409 otherwise rather than recording a
+   * change that is not a reorder.
+   */
+  reorderTracks: (id: string, recordIDs: string[]) =>
+    request<Playlist>(`/api/playlists/${encodeURIComponent(id)}/tracks`, {
+      method: 'PUT', body: { record_ids: recordIDs },
+    }),
+
   deletePlaylist: (id: string) =>
     request<void>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 

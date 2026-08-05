@@ -1,11 +1,45 @@
 package auth
 
 import (
+	"context"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// MaxConcurrentHashes bounds how many Argon2id hashes run at once.
+//
+// This is a memory ceiling with a security consequence. /api/login is
+// unauthenticated, and each request costs argonMemory (64 MiB) — so without a
+// bound, anyone who can reach the instance can drive it to an OOM kill by
+// firing concurrent logins. Measured on a 256 MiB container: 4 concurrent
+// logins peaked at 253 MiB, and 8 and 16 were killed outright.
+//
+// Two is not a compromise for its own sake. Argon2 is CPU- and memory-bound,
+// so running more of them at once does not finish them any sooner; it only
+// raises the high-water mark. Excess logins queue, which costs a goroutine
+// each rather than 64 MiB each.
+const MaxConcurrentHashes = 2
+
+var hashSlots = make(chan struct{}, MaxConcurrentHashes)
+
+// acquireHashSlot blocks until a hashing slot is free.
+//
+// It honours cancellation so a client that has already given up does not hold
+// a slot the queue behind it needs. This leaks no information about accounts:
+// whether a request is cancelled is decided by the caller, not by whether the
+// email exists.
+func acquireHashSlot(ctx context.Context) error {
+	select {
+	case hashSlots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func releaseHashSlot() { <-hashSlots }
 
 // Argon2id is memory-hard on purpose: every password hash allocates
 // argonMemory (64 MiB) and immediately drops it. That is the point of the

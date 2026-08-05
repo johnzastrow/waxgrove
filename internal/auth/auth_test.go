@@ -6,14 +6,14 @@ import (
 )
 
 func TestHashVerifyRoundTrip(t *testing.T) {
-	h, err := HashPassword("correct-horse-battery-staple")
+	h, err := HashPassword(t.Context(), "correct-horse-battery-staple")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
 	}
-	if err := VerifyPassword("correct-horse-battery-staple", h); err != nil {
+	if err := VerifyPassword(t.Context(), "correct-horse-battery-staple", h); err != nil {
 		t.Errorf("correct password rejected: %v", err)
 	}
-	if err := VerifyPassword("wrong-horse-battery-staple", h); err != ErrMismatch {
+	if err := VerifyPassword(t.Context(), "wrong-horse-battery-staple", h); err != ErrMismatch {
 		t.Errorf("wrong password err = %v, want ErrMismatch", err)
 	}
 }
@@ -22,8 +22,8 @@ func TestHashVerifyRoundTrip(t *testing.T) {
 // hashes of the same password differ.
 func TestHashIsSaltedAndOpaque(t *testing.T) {
 	pw := "correct-horse-battery-staple"
-	a, _ := HashPassword(pw)
-	b, _ := HashPassword(pw)
+	a, _ := HashPassword(t.Context(), pw)
+	b, _ := HashPassword(t.Context(), pw)
 	if a == b {
 		t.Fatal("identical hashes for the same password: salt is not random")
 	}
@@ -36,12 +36,12 @@ func TestHashIsSaltedAndOpaque(t *testing.T) {
 }
 
 func TestShortPasswordRejected(t *testing.T) {
-	if _, err := HashPassword("short"); err != ErrWeak {
+	if _, err := HashPassword(t.Context(), "short"); err != ErrWeak {
 		t.Errorf("err = %v, want ErrWeak", err)
 	}
 	// The floor counts runes, not bytes, so multi-byte passwords are not
 	// wrongly accepted as long enough.
-	if _, err := HashPassword(strings.Repeat("é", 5)); err != ErrWeak {
+	if _, err := HashPassword(t.Context(), strings.Repeat("é", 5)); err != ErrWeak {
 		t.Errorf("5 multi-byte runes accepted: %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestMalformedHashNeverVerifies(t *testing.T) {
 		"$argon2id$v=99$m=65536,t=3,p=2$c2FsdA$aGFzaA",
 		"$argon2id$v=19$m=65536,t=3,p=2$!!!$aGFzaA",
 	} {
-		if err := VerifyPassword("anything", bad); err == nil {
+		if err := VerifyPassword(t.Context(), "anything", bad); err == nil {
 			t.Errorf("malformed hash %q verified successfully", bad)
 		}
 	}
@@ -79,8 +79,8 @@ func TestNewTokenIsUniqueAndLong(t *testing.T) {
 // EqualiseTiming must actually do the argon2 work; a malformed placeholder
 // would return instantly and defeat the purpose.
 func TestEqualiseTimingUsesARealHash(t *testing.T) {
-	if err := VerifyPassword("anything", dummyHash); err != ErrMismatch {
+	if err := VerifyPassword(t.Context(), "anything", dummyHash); err != ErrMismatch {
 		t.Fatalf("placeholder hash is not well-formed: %v", err)
 	}
-	EqualiseTiming("anything") // must not panic
+	EqualiseTiming(t.Context(), "anything") // must not panic
 }

@@ -185,7 +185,16 @@ func (r *PlaylistRepo) AddRecords(ctx context.Context, playlistID, actorID strin
 	return r.Get(ctx, playlistID)
 }
 
+// ErrReorderMismatch means the submitted ordering is not a rearrangement of
+// what the playlist currently holds.
+var ErrReorderMismatch = errors.New("sqlite: reorder must be a permutation of the current tracks")
+
 // Reorder replaces the whole ordering with the given record sequence.
+//
+// The sequence must be a permutation of what is already there. Without that
+// check, Reorder would happily accept a list with tracks added or dropped and
+// then write "reordered it" into the append-only history — a change recorded as
+// something it is not, which is worse than a rejected request (F17, BR-3).
 func (r *PlaylistRepo) Reorder(ctx context.Context, playlistID, actorID string, recordIDs []string) (*domain.Playlist, error) {
 	tx, err := r.s.Writer().BeginTx(ctx, nil)
 	if err != nil {
@@ -202,6 +211,10 @@ func (r *PlaylistRepo) Reorder(ctx context.Context, playlistID, actorID string, 
 		return nil, err
 	}
 	rev++
+
+	if err := assertPermutation(ctx, tx, playlistID, recordIDs); err != nil {
+		return nil, err
+	}
 
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM playlist_tracks WHERE playlist_id = ?`, playlistID); err != nil {
@@ -225,6 +238,44 @@ func (r *PlaylistRepo) Reorder(ctx context.Context, playlistID, actorID string, 
 		return nil, err
 	}
 	return r.Get(ctx, playlistID)
+}
+
+// assertPermutation checks the submitted ordering against what is stored.
+//
+// Multiset, not set: the same record may legitimately appear at two positions
+// in a playlist, so counting matters and a plain set comparison would let a
+// duplicate be silently dropped.
+func assertPermutation(ctx context.Context, tx *sql.Tx, playlistID string, want []string) error {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT record_id FROM playlist_tracks WHERE playlist_id = ?`, playlistID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	have := make(map[string]int)
+	n := 0
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		have[id]++
+		n++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(want) != n {
+		return ErrReorderMismatch
+	}
+	for _, id := range want {
+		if have[id] == 0 {
+			return ErrReorderMismatch
+		}
+		have[id]--
+	}
+	return nil
 }
 
 // RemoveAt drops one position and closes the gap.

@@ -38,7 +38,7 @@ func TestScavengeReleasesAfterQuiet(t *testing.T) {
 	fired := watchScavenge(t)
 
 	var before, after runtime.MemStats
-	if _, err := HashPassword("correct-horse-battery-staple"); err != nil {
+	if _, err := HashPassword(t.Context(), "correct-horse-battery-staple"); err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
 	runtime.ReadMemStats(&before)
@@ -113,11 +113,11 @@ func TestDummyHashIsRealWork(t *testing.T) {
 	if dummyHash == "" {
 		t.Fatal("dummyHash is empty")
 	}
-	if err := VerifyPassword("waxgrove-timing-equalisation-placeholder", dummyHash); err != nil {
+	if err := VerifyPassword(t.Context(), "waxgrove-timing-equalisation-placeholder", dummyHash); err != nil {
 		t.Fatalf("the placeholder does not verify against itself: %v", err)
 	}
 	start := time.Now()
-	EqualiseTiming("something-else-entirely")
+	EqualiseTiming(t.Context(), "something-else-entirely")
 	if elapsed := time.Since(start); elapsed < 5*time.Millisecond {
 		t.Errorf("EqualiseTiming took %v — too fast to be a real Argon2 verification", elapsed)
 	}

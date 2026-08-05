@@ -54,8 +54,10 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("GET /api/playlists", a.authed(a.listPlaylists))
 	mux.Handle("POST /api/playlists", a.authed(a.createPlaylist))
 	mux.Handle("GET /api/playlists/{id}", a.authed(a.getPlaylist))
+	mux.Handle("PATCH /api/playlists/{id}", a.authed(a.renamePlaylist))
 	mux.Handle("DELETE /api/playlists/{id}", a.authed(a.deletePlaylist))
 	mux.Handle("POST /api/playlists/{id}/tracks", a.authed(a.addTracks))
+	mux.Handle("PUT /api/playlists/{id}/tracks", a.authed(a.reorderTracks))
 	mux.Handle("DELETE /api/playlists/{id}/tracks/{pos}", a.authed(a.removeTrack))
 	mux.Handle("GET /api/playlists/{id}/history", a.authed(a.history))
 	mux.Handle("GET /api/playlists/{id}/export.jspf", a.authed(a.exportJSPF))
@@ -361,6 +363,66 @@ func (a *API) addTracks(w http.ResponseWriter, r *http.Request, u *domain.User) 
 		"added":      len(ids),
 		"unresolved": unresolved, // never silently dropped (BR-5)
 	})
+}
+
+// renamePlaylist changes the title. A rename is a content change, so it writes
+// a revision like any other (BR-3) — annotations are what do not.
+func (a *API) renamePlaylist(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	if _, ok := a.ownedOr404(w, r, u); !ok {
+		return
+	}
+	var in struct {
+		Title string `json:"title"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		problem(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	updated, err := a.Store.Playlists().Rename(r.Context(), r.PathValue("id"), u.ID, title)
+	if errors.Is(err, sqlite.ErrNotFound) {
+		problem(w, http.StatusNotFound, "playlist not found")
+		return
+	}
+	if err != nil {
+		internal(w, "rename playlist", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, playlistView(updated))
+}
+
+// reorderTracks replaces the ordering. The body must list every record the
+// playlist currently holds, exactly once each — the store enforces that, so a
+// list with something added or dropped is rejected rather than recorded as a
+// reorder it is not.
+func (a *API) reorderTracks(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	if _, ok := a.ownedOr404(w, r, u); !ok {
+		return
+	}
+	var in struct {
+		RecordIDs []string `json:"record_ids"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	updated, err := a.Store.Playlists().Reorder(r.Context(), r.PathValue("id"), u.ID, in.RecordIDs)
+	switch {
+	case errors.Is(err, sqlite.ErrReorderMismatch):
+		problem(w, http.StatusConflict,
+			"the submitted order must contain exactly the tracks the playlist holds; "+
+				"reload it and try again")
+		return
+	case errors.Is(err, sqlite.ErrNotFound):
+		problem(w, http.StatusNotFound, "playlist not found")
+		return
+	case err != nil:
+		internal(w, "reorder tracks", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, playlistView(updated))
 }
 
 func (a *API) removeTrack(w http.ResponseWriter, r *http.Request, u *domain.User) {
