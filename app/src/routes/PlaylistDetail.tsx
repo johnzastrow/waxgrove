@@ -6,7 +6,7 @@
 // that: it hides the controls it knows will fail, and still handles the failure.
 
 import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError } from '../api/client'
+import { api, ApiError, connect, jobsApi } from '../api/client'
 import type { Playlist, Revision } from '../api/types'
 import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
@@ -51,6 +51,26 @@ export function PlaylistDetail({ id }: { id: string }) {
   const [tab, setTab] = useState<'tracks' | 'history'>('tracks')
   const [history, setHistory] = useState<Revision[] | null>(null)
   const [editing, setEditing] = useState(false)
+  const [spotifyReady, setSpotifyReady] = useState(false)
+
+  useEffect(() => {
+    connect.status()
+      .then((st) => setSpotifyReady(!!st?.connected))
+      .catch(() => setSpotifyReady(false))
+  }, [])
+
+  const exportToSpotify = async () => {
+    setBusy(true)
+    try {
+      await jobsApi.exportSpotify(id)
+      toast({ message: 'Exporting. Follow it on the Jobs screen.' })
+      navigate('/jobs')
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not start the export', bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const load = useCallback((signal?: AbortSignal) => {
     api.playlist(id, signal)
@@ -189,6 +209,12 @@ export function PlaylistDetail({ id }: { id: string }) {
           Export JSPF
         </a>
         <Link to="/" className="btn ghost">Add songs</Link>
+        {owned && spotifyReady && (
+          <button type="button" className="btn ghost" disabled={busy}
+                  onClick={() => void exportToSpotify()}>
+            Send to Spotify
+          </button>
+        )}
         {owned && !editing && (
           <button type="button" className="btn ghost" onClick={() => setEditing(true)}>
             Rename

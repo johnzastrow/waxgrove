@@ -16,9 +16,6 @@ import (
 )
 
 const (
-	defaultAPI      = "https://api.spotify.com/v1"
-	defaultAccounts = "https://accounts.spotify.com"
-
 	// maxBody caps what a provider response may cost us in memory. A playlist
 	// page is a few hundred KB; anything near this is a bug or an attack, and
 	// on a 256 MiB instance an unbounded read is an OOM.
@@ -56,10 +53,11 @@ func WithBaseURLs(api, accounts string) Option {
 }
 
 func New(opts ...Option) *Client {
+	api, accounts := endpoints()
 	c := &Client{
 		hc:          &http.Client{Timeout: 30 * time.Second},
-		apiURL:      defaultAPI,
-		accountsURL: defaultAccounts,
+		apiURL:      api,
+		accountsURL: accounts,
 		limiters:    make(map[string]*rate.Limiter),
 	}
 	for _, o := range opts {

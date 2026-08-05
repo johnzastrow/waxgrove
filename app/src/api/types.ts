@@ -121,3 +121,47 @@ export interface InviteResponse {
 
 /** The confidence at or above which the server applies a match unattended. */
 export const CONFIDENCE_THRESHOLD = 0.85
+
+// --- M2: streaming connectors ------------------------------------------------
+
+/** Where a user is in the connect flow. The Client Secret is never returned. */
+export interface ConnectStatus {
+  app_configured: boolean
+  connected: boolean
+  storefront?: string
+  /** What the user must paste into their own Spotify app settings. */
+  redirect_uri: string
+  client_id?: string
+}
+
+export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
+export type JobKind = 'import' | 'export'
+
+/** One track that did not make it. The successes are counted, not listed. */
+export interface JobProblem {
+  position: number
+  status: 'unavailable' | 'unresolved' | 'failed'
+  detail: string
+}
+
+export interface Job {
+  id: string
+  kind: JobKind
+  state: JobState
+  service: string
+  storefront: string
+  playlist_id: string
+  done: number
+  total: number
+  error: string
+  created_at: string
+  updated_at: string
+  terminal: boolean
+  /** Present only on a single-job fetch. */
+  succeeded?: number
+  problems?: JobProblem[]
+}
+
+export interface JobsResponse {
+  jobs: Job[]
+}

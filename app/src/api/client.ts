@@ -2,8 +2,9 @@
 // what a 401 means, so no view has to reimplement any of it.
 
 import type {
-  AddTracksResponse, Candidate, HistoryResponse, ImportResponse, InviteResponse,
-  Playlist, PlaylistsResponse, RecordsResponse, RemoteResponse, User,
+  AddTracksResponse, Candidate, ConnectStatus, HistoryResponse, ImportResponse,
+  InviteResponse, Job, JobsResponse, Playlist, PlaylistsResponse, RecordsResponse,
+  RemoteResponse, User,
 } from './types'
 
 /**
@@ -161,6 +162,53 @@ export const api = {
     }
     return parsed as ImportResponse
   },
+}
+
+// --- M2: streaming connectors ------------------------------------------------
+
+export const connect = {
+  /**
+   * Connection state. A 404 means this instance runs with no connector at
+   * all, which is a supported configuration rather than an error (N6).
+   */
+  status: async (signal?: AbortSignal): Promise<ConnectStatus | null> => {
+    try {
+      return await request<ConnectStatus>('/api/connect/spotify', signal ? { signal } : {})
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
+  },
+
+  /** Store the user's own app (D6). The secret goes in and never comes back. */
+  saveApp: (client_id: string, client_secret: string) =>
+    request<ConnectStatus>('/api/connect/spotify/app', {
+      method: 'PUT', body: { client_id, client_secret },
+    }),
+
+  begin: () =>
+    request<{ authorize_url: string }>('/api/connect/spotify/begin', { method: 'POST' }),
+
+  disconnect: () => request<void>('/api/connect/spotify', { method: 'DELETE' }),
+}
+
+export const jobsApi = {
+  /** Import a playlist the user pasted a link to. Returns the job, not a result. */
+  importSpotify: (link: string) =>
+    request<Job>('/api/import/spotify', { method: 'POST', body: { link } }),
+
+  exportSpotify: (playlistID: string) =>
+    request<Job>(`/api/playlists/${encodeURIComponent(playlistID)}/export/spotify`,
+      { method: 'POST' }),
+
+  list: (signal?: AbortSignal) =>
+    request<JobsResponse>('/api/jobs', signal ? { signal } : {}),
+
+  get: (id: string, signal?: AbortSignal) =>
+    request<Job>(`/api/jobs/${encodeURIComponent(id)}`, signal ? { signal } : {}),
+
+  cancel: (id: string) =>
+    request<void>(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 }
 
 /** Turn a record into the candidate shape the add-tracks endpoint accepts. */

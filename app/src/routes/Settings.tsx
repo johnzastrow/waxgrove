@@ -1,10 +1,12 @@
 // Account, invites, and what this instance actually stores.
 
-import { useState } from 'react'
-import { api, ApiError } from '../api/client'
+import { useEffect, useState } from 'react'
+import { api, ApiError, connect } from '../api/client'
+import type { ConnectStatus } from '../api/types'
 import { useSession } from '../state/session'
-import { ErrorNote } from '../components/bits'
-import { useToast } from '../router'
+import { ErrorNote, Loading } from '../components/bits'
+import { Connect } from '../components/Connect'
+import { navigate, useToast } from '../router'
 
 export function Settings() {
   const { user, signOut } = useSession()
@@ -12,6 +14,35 @@ export function Settings() {
   const [invite, setInvite] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // null means this instance has no connector at all, which is a supported
+  // configuration rather than a failure (N6). undefined means still loading.
+  const [spotify, setSpotify] = useState<ConnectStatus | null | undefined>(undefined)
+  useEffect(() => {
+    const ac = new AbortController()
+    connect.status(ac.signal)
+      .then(setSpotify)
+      .catch(() => setSpotify(null))
+    return () => ac.abort()
+  }, [])
+
+  // The OAuth callback redirects back here with its outcome in the query, since
+  // the browser arrives from Spotify rather than from the app's own fetch.
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get('spotify')
+    if (!result) return
+    const messages: Record<string, { message: string; bad?: boolean }> = {
+      connected: { message: 'Spotify connected.' },
+      denied: { message: 'Spotify authorisation was declined.', bad: true },
+      expired: { message: 'That connection attempt expired — try again.', bad: true },
+      failed: { message: 'Spotify refused the connection. Check your Client ID and Secret.', bad: true },
+    }
+    const m = messages[result]
+    if (m) toast(m)
+    // Clear the query so a refresh does not repeat the message.
+    navigate('/settings', { replace: true })
+    connect.status().then(setSpotify).catch(() => {})
+  }, [toast])
 
   if (!user) return null
 
@@ -77,6 +108,9 @@ export function Settings() {
           </div>
         </section>
       )}
+
+      {spotify === undefined && <Loading what="Checking connections…" />}
+      {spotify && <Connect status={spotify} onChange={setSpotify} />}
 
       <section className="card">
         <p className="eyebrow">What this holds</p>

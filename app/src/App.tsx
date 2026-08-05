@@ -9,11 +9,13 @@ import { Grove } from './routes/Grove'
 import { Playlists } from './routes/Playlists'
 import { PlaylistDetail } from './routes/PlaylistDetail'
 import { Settings } from './routes/Settings'
+import { Jobs } from './routes/Jobs'
 import { UpdatePrompt } from './pwa'
 
 const NAV = [
   { to: '/', label: 'Grove' },
   { to: '/playlists', label: 'Playlists' },
+  { to: '/jobs', label: 'Jobs' },
   { to: '/settings', label: 'You' },
 ]
 
@@ -88,6 +90,7 @@ export function App() {
 function Route({ path }: { path: string }) {
   if (path === '/') return <Grove />
   if (path === '/playlists') return <Playlists />
+  if (path === '/jobs') return <Jobs />
   if (path === '/settings') return <Settings />
 
   const detail = match('/playlists/:id', path)

@@ -262,6 +262,18 @@ func (r *JobRepo) PurgeOlderThan(ctx context.Context, age time.Duration) (int, e
 	return int(n), err
 }
 
+// SetStorefront records which market a job resolved against, so the outcome can
+// say where a track was missing rather than just that it was.
+func (r *JobRepo) SetStorefront(ctx context.Context, jobID, storefront string) error {
+	res, err := r.s.Writer().ExecContext(ctx,
+		`UPDATE jobs SET storefront = ?, updated_at = ? WHERE id = ?`,
+		nullStr(storefront), nowRFC3339(), jobID)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res, ErrJobNotFound)
+}
+
 // AttachPlaylist records which playlist a job produced, so the job surface can
 // link straight to the result rather than telling the user to go and find it.
 func (r *JobRepo) AttachPlaylist(ctx context.Context, jobID, playlistID string) error {

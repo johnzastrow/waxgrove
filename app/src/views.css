@@ -170,3 +170,66 @@
   display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   border-left-color: var(--copper);
 }
+
+/* ------------------------------------------------------------ connect (M2) -- */
+/* The wizard is longer than a normal OAuth button because BYO genuinely needs
+   four steps (D6). Numbering them makes that read as a process rather than as
+   an unexplained pile of fields. */
+
+.wizard { list-style: none; margin-top: 1rem; display: grid; gap: 1.1rem; }
+.wizard li { display: flex; gap: .8rem; align-items: flex-start; }
+.wizard li.pending { opacity: .5; }
+.wizard .step {
+  flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid var(--grove-500); color: var(--grove-300);
+  font-family: var(--mono); font-size: .72rem;
+}
+.wizard li > div { flex: 1; min-width: 0; }
+.wizard strong { color: var(--cream-100); font-size: .95rem; }
+.wizard p { margin-top: .2rem; }
+
+.redirect {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin-top: .5rem; padding: .55rem .7rem;
+  background: var(--wax-700); border: 1px dashed var(--wax-500); border-radius: 3px;
+  font-size: .78rem; color: var(--copper-br); overflow-wrap: anywhere;
+}
+.redirect span { flex: 1; min-width: 0; }
+
+.paste { margin-bottom: 1rem; }
+.paste label { margin-top: 0; }
+
+/* --------------------------------------------------------------- jobs (M2) -- */
+
+.jobs { list-style: none; display: grid; gap: .7rem; }
+.job {
+  border: 1px solid var(--wax-600); border-radius: 4px;
+  background: var(--wax-800); padding: .9rem 1rem;
+}
+.job.running, .job.queued { border-left: 2px solid var(--copper); }
+.job.done   { border-left: 2px solid var(--grove-500); }
+.job.failed { border-left: 2px solid var(--ember); }
+.job.cancelled { opacity: .65; }
+
+.job-head { display: flex; align-items: center; gap: .7rem; }
+.job-head .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.job-head .ti { color: var(--cream-100); font-weight: 500; font-size: .95rem; }
+.job-head .ar { color: var(--cream-300); font-size: .76rem; font-family: var(--mono); }
+
+/* A determinate bar, styled in both engines. Left unstyled it renders as a
+   system widget that belongs to no part of this design. */
+.bar {
+  width: 100%; height: 4px; margin-top: .6rem;
+  appearance: none; border: none; background: var(--wax-600); border-radius: 2px;
+}
+.bar::-webkit-progress-bar { background: var(--wax-600); border-radius: 2px; }
+.bar::-webkit-progress-value { background: var(--copper); border-radius: 2px; }
+.bar::-moz-progress-bar { background: var(--copper); border-radius: 2px; }
+
+.job-detail { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--wax-700); }
+.job-detail .rows li { border-bottom-color: var(--wax-700); }
+.job-detail .pos { min-width: 1.6rem; font-size: .68rem; color: var(--cream-300); opacity: .7; }
+.job-detail .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.job-detail .ti { font-size: .88rem; color: var(--cream-200); }
+.job-detail .ar { font-size: .72rem; color: var(--copper); font-family: var(--mono); }

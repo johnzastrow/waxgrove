@@ -386,13 +386,20 @@ func TestExportReportsUnavailableTracksAndStillSucceeds(t *testing.T) {
 	for _, it := range full.Items {
 		if it.Status == domain.JobItemUnavailable {
 			unavailable++
-			if !strings.Contains(it.Detail, "GB") {
-				t.Errorf("detail %q does not say which market it is missing from", it.Detail)
+			// The item names the track; the status says why, and the market
+			// lives on the job. Repeating the reason in both reads as a
+			// stutter in the job surface.
+			if !strings.Contains(it.Detail, "Track AA") {
+				t.Errorf("detail %q does not name the track", it.Detail)
 			}
 		}
 	}
 	if unavailable != 2 {
 		t.Errorf("recorded %d unavailable tracks, want 2", unavailable)
+	}
+	// Which market it resolved against is what makes "unavailable" actionable.
+	if full.Storefront != "GB" {
+		t.Errorf("job storefront = %q, want the market it resolved against", full.Storefront)
 	}
 }
 

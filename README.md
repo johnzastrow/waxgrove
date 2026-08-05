@@ -319,12 +319,47 @@ quietly.
 | `WAXGROVE_DB` | `waxgrove.db` | SQLite path. |
 | `WAXGROVE_ENV` | `development` | `production` additionally requires an https `WAXGROVE_BASE_URL` and refuses open registration. |
 | `WAXGROVE_INVITE_ONLY` | `true` | §6: a friends app, not a public service. |
+| `WAXGROVE_SPOTIFY` | `false` | Turns on the Spotify connector. Off by default — every user must register their own Spotify app, so this should be a deliberate choice. |
 
 Running with **no metadata source at all** is a supported configuration, not a degraded one:
 
 ```bash
 WAXGROVE_METADATA_SOURCE=none make run
 ```
+
+## Connecting Spotify
+
+Set `WAXGROVE_SPOTIFY=true`, then each member connects their own account under
+**You → Spotify**. The wizard walks through it: create a free app on the Spotify
+developer dashboard, paste in the redirect URI Waxgrove shows, paste back the
+Client ID and Secret, authorise.
+
+**Why each user brings their own app.** Spotify's Development Mode pools quota
+per developer account and caps an app at five users. An operator-owned app would
+put a hard ceiling on how many friends could use the instance, so Waxgrove does
+not ship one (D6). Credentials are AES-256-GCM at rest and the Secret is never
+returned by any endpoint.
+
+**Import is a pasted link, not a picker.** The February 2026 API migration
+removed the endpoint that listed a user's playlists, so in Spotify you use
+Share → Copy link to playlist. That is forced by the quota mode, not a
+preference.
+
+**Partial success is normal.** Regional licensing, exclusives and delistings
+mean some tracks will not exist on the target. An export that placed most of
+them reports done and lists exactly which ones did not make it, with the market
+it resolved against — a quietly shorter playlist is the worst way to deliver
+that news.
+
+Both directions run as background jobs with visible progress, because a cold
+export can exceed a minute and a self-hosted box restarts for updates. Watch
+them under **Jobs**.
+
+Spotify's URLs are hardcoded, deliberately. There is exactly one Spotify, so
+they are not a deployment variable — and a configurable authorisation endpoint
+is a credential-harvesting vector. Driving the binary against a stub during
+development needs a separate build (`go build -tags waxgrovedev`), so a release
+binary contains no such path at all.
 
 ## License
 

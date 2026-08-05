@@ -6,12 +6,12 @@
 // normal, supported state, not an error — so that case says so plainly (N6).
 
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, candidateFromRecord } from '../api/client'
+import { api, ApiError, candidateFromRecord, connect, jobsApi } from '../api/client'
 import type { Candidate, Playlist, SongRecord } from '../api/types'
 import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
 import { Disambiguate } from '../components/Disambiguate'
 import type { Unresolved } from '../api/types'
-import { useToast } from '../router'
+import { Link, navigate, useToast } from '../router'
 
 /** Two candidates are the same staged item when they agree on identity. */
 function key(c: Candidate): string {
@@ -38,11 +38,35 @@ export function Grove() {
   const [adding, setAdding] = useState(false)
   const [unresolved, setUnresolved] = useState<Unresolved[]>([])
 
+  const [spotifyReady, setSpotifyReady] = useState(false)
+  const [link, setLink] = useState('')
+  const [importing, setImporting] = useState(false)
+
   useEffect(() => {
     api.playlists()
       .then((r) => setPlaylists(r.playlists ?? []))
       .catch(() => { /* the picker just stays empty; search still works */ })
+    // Absent connector, or an unconnected account: the import box stays hidden
+    // rather than offering something that cannot work (N6).
+    connect.status()
+      .then((st) => setSpotifyReady(!!st?.connected))
+      .catch(() => setSpotifyReady(false))
   }, [])
+
+  const importFromSpotify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setImporting(true)
+    try {
+      await jobsApi.importSpotify(link.trim())
+      setLink('')
+      toast({ message: 'Importing. Follow it on the Jobs screen.' })
+      navigate('/jobs')
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not start the import', bad: true })
+    } finally {
+      setImporting(false)
+    }
+  }
 
   // Debounced search. The ref lets a newer keystroke abort an in-flight
   // request, so results can never arrive out of order.
@@ -120,6 +144,30 @@ export function Grove() {
         placeholder="Title, artist, or ISRC" aria-label="Search for a song"
         autoComplete="off" className="search-input"
       />
+
+      {spotifyReady && (
+        <form className="card paste" onSubmit={importFromSpotify}>
+          <p className="eyebrow">Bring a playlist in</p>
+          <label>
+            <span className="lbl">Spotify playlist link</span>
+            <input
+              type="text" value={link} onChange={(e) => setLink(e.target.value)}
+              placeholder="https://open.spotify.com/playlist/…"
+              autoComplete="off" spellCheck={false}
+            />
+          </label>
+          <p className="small muted">
+            In Spotify, use Share then Copy link to playlist. Spotify no longer
+            lets an app list your playlists, so pasting the link is the way in.
+          </p>
+          <div className="row-actions">
+            <button type="submit" className="btn" disabled={importing || !link.trim()}>
+              {importing ? 'Starting…' : 'Import'}
+            </button>
+            <Link to="/jobs" className="btn ghost">See transfers</Link>
+          </div>
+        </form>
+      )}
 
       {staged.length > 0 && (
         <section className="card good staged" aria-label="Staged songs">

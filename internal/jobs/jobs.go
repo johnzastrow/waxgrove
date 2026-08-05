@@ -254,6 +254,9 @@ func (r *Runner) runExport(ctx context.Context, job *domain.Job) error {
 	if err != nil {
 		return err
 	}
+	if err := jobs.SetStorefront(ctx, job.ID, market); err != nil {
+		return err
+	}
 	if err := jobs.Progress(ctx, job.ID, 0, len(playlist.Tracks)); err != nil {
 		return err
 	}
@@ -268,8 +271,9 @@ func (r *Runner) runExport(ctx context.Context, job *domain.Job) error {
 			return nil
 		}
 		res := r.spotify.Resolve(ctx, app, tok, t.Record, market)
-		_ = jobs.AddItem(ctx, job.ID, i, t.Record.ID, res.Status,
-			trackLabel(t.Record)+" — "+res.Detail)
+		// The detail names the track; the status carries why. Putting the
+		// reason in both reads as a stutter in the job surface.
+		_ = jobs.AddItem(ctx, job.ID, i, t.Record.ID, res.Status, trackLabel(t.Record))
 		if res.Status == domain.JobItemOK && res.URI != "" {
 			uris = append(uris, res.URI)
 		} else {

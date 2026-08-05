@@ -278,7 +278,8 @@ func jobView(j *domain.Job) map[string]any {
 	return map[string]any{
 		"id": j.ID, "kind": j.Kind, "state": j.State,
 		"service": j.Service, "playlist_id": j.PlaylistID,
-		"done": j.Done, "total": j.Total, "error": j.Error,
+		"storefront": j.Storefront,
+		"done":       j.Done, "total": j.Total, "error": j.Error,
 		"created_at": j.CreatedAt, "updated_at": j.UpdatedAt,
 		"terminal": j.Terminal(),
 	}
