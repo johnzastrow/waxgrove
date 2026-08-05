@@ -186,6 +186,8 @@ papering over it. Anti-corporate without being shouty. Plain language, no hype.
 
 | Document | Contents |
 |---|---|
+| [`docs/GettingStarted.md`](docs/GettingStarted.md) | **Start here after installing** — the first account, the crate, playlists, annotations, connecting Spotify, your data |
+| [`docs/apple-music-membership.md`](docs/apple-music-membership.md) | The Apple Developer Program membership: what it costs, what works free without it, what it unlocks, the terms, and how to decide |
 | [`docs/requirements.md`](docs/requirements.md) | Requirements, architecture, streaming-API feasibility findings, security profile, resolved decisions (D1–D10) |
 | [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | Schema: mermaid ERDs, business rules, and a full data dictionary |
 | [`docs/streaming-integration.md`](docs/streaming-integration.md) | How Waxgrove exchanges playlists with Spotify and Apple Music — credentials, authorisation, import/export mechanics, storefronts, rate limits, and the user journeys |

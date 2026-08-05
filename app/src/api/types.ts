@@ -165,3 +165,76 @@ export interface Job {
 export interface JobsResponse {
   jobs: Job[]
 }
+
+// --- M3: crate, annotations, discovery ---------------------------------------
+
+export type CrateStatus = 'resolved' | 'ambiguous' | 'unresolved'
+
+/** One staged candidate. The candidate is always present; the record only once
+ *  something matched — an unresolved item still shows what the user asked for. */
+export interface CrateItem {
+  id: string
+  position: number
+  status: CrateStatus
+  candidate: Candidate
+  record?: SongRecord
+  method: MatchMethod
+  confidence: number
+  source_ref: string
+}
+
+export interface CrateResponse {
+  items: CrateItem[]
+  total: number
+  needs_decision: number
+}
+
+export interface CommitResponse {
+  playlist: Playlist
+  /** What stayed behind because it still needs a decision. */
+  left_in_crate: number
+}
+
+export interface Rating {
+  average: number
+  count: number
+  /** This user's own rating, 0 if they have not rated it. */
+  mine: number
+}
+
+export interface Tag {
+  id: string
+  name: string
+  visibility: 'private' | 'shared'
+  mine: boolean
+}
+
+export interface Comment {
+  id: string
+  body: string
+  author: string
+  mine: boolean
+  created_at: string
+}
+
+export interface Annotations {
+  rating: Rating
+  tags: Tag[]
+  comments: Comment[]
+}
+
+/** A playlist in a discovery listing: counts, no track list. */
+export interface PlaylistSummary {
+  id: string
+  title: string
+  description: string
+  owner_id: string
+  owner: string
+  revision: number
+  track_count: number
+  rating?: Rating
+}
+
+export interface SharedResponse {
+  playlists: PlaylistSummary[]
+}

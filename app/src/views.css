@@ -233,3 +233,63 @@
 .job-detail .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .job-detail .ti { font-size: .88rem; color: var(--cream-200); }
 .job-detail .ar { font-size: .72rem; color: var(--copper); font-family: var(--mono); }
+
+/* --------------------------------------------------------------- crate (M3) -- */
+
+.crate-note { margin: -.5rem 0 1rem; }
+.commit { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid rgba(122,150,112,.25); }
+.commit label { margin-top: 0; }
+
+textarea {
+  width: 100%; padding: .7rem .8rem;
+  background: var(--wax-700); color: var(--cream-100);
+  border: 1px solid var(--wax-600); border-radius: 3px;
+  font-family: var(--ui); resize: vertical; min-height: 6rem;
+}
+
+/* --------------------------------------------------------- annotations (M3) -- */
+/* Visually separate from the track list, because they are separate: nothing
+   here changes the playlist or its history (D8, BR-3). */
+
+.annotations { margin-top: .8rem; }
+
+.stars { display: flex; align-items: center; gap: .15rem; flex-wrap: wrap; }
+.star {
+  background: none; border: none; cursor: pointer; padding: .2rem;
+  font-size: 1.6rem; line-height: 1; color: var(--wax-500);
+  min-width: 44px; min-height: 44px;   /* touch target */
+}
+.star.on { color: var(--copper); }
+.star:hover { color: var(--copper-br); }
+.stars .aggregate { margin-left: .6rem; }
+
+.taglist { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
+.tag {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .25rem .6rem; border-radius: 999px;
+  border: 1px solid var(--grove-500); background: rgba(61,86,56,.16);
+  font-size: .8rem; color: var(--cream-100);
+}
+.tag.private { border-style: dashed; border-color: var(--copper); background: transparent; }
+.tag .only-you {
+  font-family: var(--mono); font-size: .55rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--copper);
+}
+.tag button {
+  background: none; border: none; cursor: pointer; padding: 0 .1rem;
+  color: var(--cream-300); font-size: 1rem; line-height: 1;
+}
+.tag button:hover { color: var(--copper-br); }
+
+.tag-add label { margin-top: .5rem; }
+.check { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; }
+.check input { width: 1.1rem; height: 1.1rem; accent-color: var(--grove-500); }
+.check span { font-size: .85rem; color: var(--cream-300); }
+
+.comments { list-style: none; margin: .6rem 0; display: grid; gap: .8rem; }
+.comments li { border-left: 2px solid var(--wax-600); padding-left: .8rem; }
+.comment-head { display: flex; align-items: center; gap: .6rem; }
+.comment-head .who { color: var(--cream-100); font-weight: 500; font-size: .88rem; }
+.comment-head .when { font-size: .68rem; color: var(--cream-300); opacity: .7; }
+.comment-head .btn { margin-left: auto; }
+.comments .body { font-size: .9rem; margin-top: .2rem; overflow-wrap: anywhere; }

@@ -11,6 +11,7 @@ import type { Playlist, Revision } from '../api/types'
 import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
 import { useSession } from '../state/session'
+import { Annotations } from '../components/Annotations'
 
 const OP_LABEL: Record<string, string> = {
   create: 'created it',
@@ -48,7 +49,7 @@ export function PlaylistDetail({ id }: { id: string }) {
   const [playlist, setPlaylist] = useState<Playlist | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [tab, setTab] = useState<'tracks' | 'history'>('tracks')
+  const [tab, setTab] = useState<'tracks' | 'notes' | 'history'>('tracks')
   const [history, setHistory] = useState<Revision[] | null>(null)
   const [editing, setEditing] = useState(false)
   const [spotifyReady, setSpotifyReady] = useState(false)
@@ -239,6 +240,13 @@ export function PlaylistDetail({ id }: { id: string }) {
           Tracks · {playlist.tracks?.length ?? 0}
         </button>
         <button
+          type="button" role="tab" aria-selected={tab === 'notes'}
+          className={tab === 'notes' ? 'tab on' : 'tab'}
+          onClick={() => setTab('notes')}
+        >
+          Notes
+        </button>
+        <button
           type="button" role="tab" aria-selected={tab === 'history'}
           className={tab === 'history' ? 'tab on' : 'tab'}
           onClick={() => setTab('history')}
@@ -293,6 +301,8 @@ export function PlaylistDetail({ id }: { id: string }) {
           </ul>
         )
       )}
+
+      {tab === 'notes' && <Annotations playlistID={id} />}
 
       {tab === 'history' && (
         history === null ? <Loading what="Reading the log…" /> : (

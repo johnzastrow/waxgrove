@@ -4,13 +4,15 @@
 // already local and free to search; the network is only consulted for what the
 // grove has not seen. An instance with no metadata source configured is a
 // normal, supported state, not an error — so that case says so plainly (N6).
+//
+// Staging goes to the crate (F16), not to component state: it persists, it
+// survives this browser, and it is where a doubtful match gets settled before
+// any playlist exists.
 
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, candidateFromRecord, connect, jobsApi } from '../api/client'
-import type { Candidate, Playlist, SongRecord } from '../api/types'
+import { api, ApiError, candidateFromRecord, connect, crate, jobsApi } from '../api/client'
+import type { Candidate, SongRecord } from '../api/types'
 import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
-import { Disambiguate } from '../components/Disambiguate'
-import type { Unresolved } from '../api/types'
 import { Link, navigate, useToast } from '../router'
 
 /** Two candidates are the same staged item when they agree on identity. */
@@ -28,30 +30,34 @@ export function Grove() {
   const [error, setError] = useState<string | null>(null)
   const [searched, setSearched] = useState(false)
 
-  // Staged picks. Deliberately session-scoped for M1: the persistent crate
-  // needs server storage that does not exist yet, and a crate that silently
-  // lived only in one browser would be worse than none.
-  const [staged, setStaged] = useState<Candidate[]>([])
-
-  const [playlists, setPlaylists] = useState<Playlist[]>([])
-  const [target, setTarget] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [unresolved, setUnresolved] = useState<Unresolved[]>([])
+  const [crateCount, setCrateCount] = useState(0)
+  const [justStaged, setJustStaged] = useState<Set<string>>(new Set())
 
   const [spotifyReady, setSpotifyReady] = useState(false)
   const [link, setLink] = useState('')
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
-    api.playlists()
-      .then((r) => setPlaylists(r.playlists ?? []))
-      .catch(() => { /* the picker just stays empty; search still works */ })
+    crate.list()
+      .then((r) => setCrateCount(r.total))
+      .catch(() => { /* the count is a nicety; search still works */ })
     // Absent connector, or an unconnected account: the import box stays hidden
     // rather than offering something that cannot work (N6).
     connect.status()
       .then((st) => setSpotifyReady(!!st?.connected))
       .catch(() => setSpotifyReady(false))
   }, [])
+
+  const stage = async (c: Candidate) => {
+    try {
+      const r = await crate.add([c])
+      setCrateCount(r.total)
+      setJustStaged((prev) => new Set(prev).add(key(c)))
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not stage that', bad: true })
+    }
+  }
+  const isStaged = (c: Candidate) => justStaged.has(key(c))
 
   const importFromSpotify = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -107,32 +113,15 @@ export function Grove() {
     return () => clearTimeout(t)
   }, [q])
 
-  const stage = (c: Candidate) => {
-    setStaged((prev) => prev.some((p) => key(p) === key(c)) ? prev : [...prev, c])
-  }
-  const unstage = (c: Candidate) => {
-    setStaged((prev) => prev.filter((p) => key(p) !== key(c)))
-  }
-  const isStaged = (c: Candidate) => staged.some((p) => key(p) === key(c))
-
-  const addStaged = async (candidates: Candidate[] = staged) => {
-    if (!target || candidates.length === 0) return
-    setAdding(true)
-    try {
-      const res = await api.addTracks(target, candidates)
-      // Only the items that actually landed leave the staging list; anything
-      // unresolved stays put so it cannot be lost by being "added" (BR-5).
-      const stillUnresolved = new Set((res.unresolved ?? []).map((u) => key(u.candidate)))
-      setStaged((prev) => prev.filter((c) => stillUnresolved.has(key(c))))
-      setUnresolved(res.unresolved ?? [])
-      const name = playlists.find((p) => p.id === target)?.title ?? 'the playlist'
-      toast({ message: `Added ${res.added} to ${name}.` })
-    } catch (err) {
-      toast({ message: err instanceof ApiError ? err.message : 'could not add tracks', bad: true })
-    } finally {
-      setAdding(false)
-    }
-  }
+  const stageButton = (c: Candidate) => (
+    <button
+      type="button" className={isStaged(c) ? 'btn sm ghost' : 'btn sm'}
+      disabled={isStaged(c)}
+      onClick={() => void stage(c)}
+    >
+      {isStaged(c) ? 'In crate' : 'Stage'}
+    </button>
+  )
 
   return (
     <>
@@ -144,6 +133,14 @@ export function Grove() {
         placeholder="Title, artist, or ISRC" aria-label="Search for a song"
         autoComplete="off" className="search-input"
       />
+
+      {crateCount > 0 && (
+        <p className="small crate-note">
+          <Link to="/crate">
+            {crateCount} {crateCount === 1 ? 'song' : 'songs'} waiting in your crate →
+          </Link>
+        </p>
+      )}
 
       {spotifyReady && (
         <form className="card paste" onSubmit={importFromSpotify}>
@@ -169,55 +166,6 @@ export function Grove() {
         </form>
       )}
 
-      {staged.length > 0 && (
-        <section className="card good staged" aria-label="Staged songs">
-          <p className="eyebrow">Staged · {staged.length}</p>
-          <ul className="rows">
-            {staged.map((c) => (
-              <SongRow
-                key={key(c)} candidate={c}
-                action={
-                  <button type="button" className="btn sm ghost" onClick={() => unstage(c)}>
-                    Remove
-                  </button>
-                }
-              />
-            ))}
-          </ul>
-          <div className="row-actions">
-            <label className="picker">
-              <span className="lbl">Add to</span>
-              <select value={target} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">Choose a playlist…</option>
-                {playlists.map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button" className="btn"
-              disabled={!target || adding}
-              onClick={() => void addStaged()}
-            >
-              {adding ? 'Adding…' : `Add ${staged.length}`}
-            </button>
-          </div>
-          {playlists.length === 0 && (
-            <p className="small muted">
-              You have no playlists yet — make one first and these will still be here.
-            </p>
-          )}
-        </section>
-      )}
-
-      {unresolved.length > 0 && (
-        <Disambiguate
-          items={unresolved}
-          onChoose={async (chosen) => { await addStaged([chosen]) }}
-          onDismiss={() => setUnresolved([])}
-        />
-      )}
-
       <ErrorNote error={error} />
       {searching && <Loading what="Searching the grove…" />}
 
@@ -225,23 +173,13 @@ export function Grove() {
         <section className="card">
           <p className="eyebrow">In the grove · {local.length}</p>
           <ul className="rows">
-            {local.map((r) => {
-              const c = candidateFromRecord(r)
-              return (
-                <SongRow
-                  key={r.id} record={r} confidence={1}
-                  badge={<span className="badge g">local</span>}
-                  action={
-                    <button
-                      type="button" className={isStaged(c) ? 'btn sm ghost' : 'btn sm'}
-                      onClick={() => isStaged(c) ? unstage(c) : stage(c)}
-                    >
-                      {isStaged(c) ? 'Staged' : 'Stage'}
-                    </button>
-                  }
-                />
-              )
-            })}
+            {local.map((r) => (
+              <SongRow
+                key={r.id} record={r} confidence={1}
+                badge={<span className="badge g">local</span>}
+                action={stageButton(candidateFromRecord(r))}
+              />
+            ))}
           </ul>
         </section>
       )}
@@ -262,14 +200,7 @@ export function Grove() {
               <SongRow
                 key={key(c) + i} candidate={c}
                 badge={<span className="badge">new to the grove</span>}
-                action={
-                  <button
-                    type="button" className={isStaged(c) ? 'btn sm ghost' : 'btn sm'}
-                    onClick={() => isStaged(c) ? unstage(c) : stage(c)}
-                  >
-                    {isStaged(c) ? 'Staged' : 'Stage'}
-                  </button>
-                }
+                action={stageButton(c)}
               />
             ))}
           </ul>
@@ -278,11 +209,12 @@ export function Grove() {
 
       {searched && !searching && local.length === 0 && remote.length === 0 && (
         <Empty title="Nothing found">
-          Try fewer words, or the artist name on its own.
+          Try fewer words, or the artist name on its own. You can also paste a
+          list straight into <Link to="/crate">your crate</Link>.
         </Empty>
       )}
 
-      {!searched && !searching && staged.length === 0 && (
+      {!searched && !searching && (
         <Empty title="Search the shared catalogue">
           Everything anyone here has ever added is already searchable, instantly.
           Anything else is looked up from the metadata source.

@@ -1,7 +1,7 @@
 // Account, invites, and what this instance actually stores.
 
 import { useEffect, useState } from 'react'
-import { api, ApiError, connect } from '../api/client'
+import { api, ApiError, connect, privacy } from '../api/client'
 import type { ConnectStatus } from '../api/types'
 import { useSession } from '../state/session'
 import { ErrorNote, Loading } from '../components/bits'
@@ -111,6 +111,39 @@ export function Settings() {
 
       {spotify === undefined && <Loading what="Checking connections…" />}
       {spotify && <Connect status={spotify} onChange={setSpotify} />}
+
+      <section className="card">
+        <p className="eyebrow">Your data</p>
+        <h3>Take it or leave</h3>
+        <p className="small muted">
+          Everything of yours, in one file: your account, your playlists, your
+          annotations and your crate. Secrets are deliberately left out — an
+          export is a file that travels.
+        </p>
+        <div className="row-actions">
+          <a className="btn ghost" href={privacy.exportURL()} download>Download my data</a>
+          <button
+            type="button" className="btn danger"
+            onClick={() => {
+              const typed = window.prompt(
+                'This deletes your account and cannot be undone.\n\n' +
+                'Songs you added stay in the shared catalogue — they are not yours ' +
+                'alone, and removing them would break other people\'s playlists. ' +
+                'Your name comes off what you wrote.\n\n' +
+                'Type your email address to confirm:')
+              if (typed === null) return
+              void privacy.erase(typed)
+                .then(() => { window.location.assign('/') })
+                .catch((err) => toast({
+                  message: err instanceof ApiError ? err.message : 'could not erase the account',
+                  bad: true,
+                }))
+            }}
+          >
+            Delete my account
+          </button>
+        </div>
+      </section>
 
       <section className="card">
         <p className="eyebrow">What this holds</p>

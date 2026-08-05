@@ -2,9 +2,10 @@
 // what a 401 means, so no view has to reimplement any of it.
 
 import type {
-  AddTracksResponse, Candidate, ConnectStatus, HistoryResponse, ImportResponse,
-  InviteResponse, Job, JobsResponse, Playlist, PlaylistsResponse, RecordsResponse,
-  RemoteResponse, User,
+  AddTracksResponse, Annotations, Candidate, CommitResponse, ConnectStatus,
+  CrateItem, CrateResponse, HistoryResponse, ImportResponse, InviteResponse, Job,
+  JobsResponse, Playlist, PlaylistsResponse, RecordsResponse, RemoteResponse,
+  SharedResponse, User,
 } from './types'
 
 /**
@@ -162,6 +163,83 @@ export const api = {
     }
     return parsed as ImportResponse
   },
+}
+
+// --- M3: the crate -----------------------------------------------------------
+
+export const crate = {
+  list: (signal?: AbortSignal) =>
+    request<CrateResponse>('/api/crate', signal ? { signal } : {}),
+
+  /** Stage candidates. Each is run down the resolution ladder on the way in. */
+  add: (candidates: Candidate[]) =>
+    request<CrateResponse>('/api/crate', { method: 'POST', body: { candidates } }),
+
+  /** Stage a pasted list — one song per line, ideally "Artist — Title". */
+  paste: (text: string) =>
+    request<CrateResponse>('/api/crate/paste', { method: 'POST', body: { text } }),
+
+  /** Settle an item the resolver would not guess at (F12). */
+  resolve: (itemID: string, choice: { record_id?: string; candidate?: Candidate }) =>
+    request<CrateItem>(`/api/crate/${encodeURIComponent(itemID)}/resolve`, {
+      method: 'POST', body: choice,
+    }),
+
+  remove: (itemID: string) =>
+    request<void>(`/api/crate/${encodeURIComponent(itemID)}`, { method: 'DELETE' }),
+
+  clear: () => request<void>('/api/crate', { method: 'DELETE' }),
+
+  /** Commit the resolved part. Whatever still needs a decision stays staged. */
+  commit: (title: string, description = '') =>
+    request<CommitResponse>('/api/crate/commit', {
+      method: 'POST', body: { title, description },
+    }),
+}
+
+// --- M3: annotations and discovery -------------------------------------------
+
+export const annotations = {
+  get: (playlistID: string, signal?: AbortSignal) =>
+    request<Annotations>(`/api/playlists/${encodeURIComponent(playlistID)}/annotations`,
+      signal ? { signal } : {}),
+
+  rate: (playlistID: string, value: number) =>
+    request<Annotations>(`/api/playlists/${encodeURIComponent(playlistID)}/rating`, {
+      method: 'PUT', body: { value },
+    }),
+
+  unrate: (playlistID: string) =>
+    request<Annotations>(`/api/playlists/${encodeURIComponent(playlistID)}/rating`,
+      { method: 'DELETE' }),
+
+  addTag: (playlistID: string, name: string, visibility: 'private' | 'shared') =>
+    request<Annotations>(`/api/playlists/${encodeURIComponent(playlistID)}/tags`, {
+      method: 'POST', body: { name, visibility },
+    }),
+
+  removeTag: (tagID: string) =>
+    request<void>(`/api/tags/${encodeURIComponent(tagID)}`, { method: 'DELETE' }),
+
+  comment: (playlistID: string, body: string) =>
+    request<Annotations>(`/api/playlists/${encodeURIComponent(playlistID)}/comments`, {
+      method: 'POST', body: { body },
+    }),
+
+  deleteComment: (commentID: string) =>
+    request<void>(`/api/comments/${encodeURIComponent(commentID)}`, { method: 'DELETE' }),
+}
+
+export const discover = {
+  shared: (signal?: AbortSignal) =>
+    request<SharedResponse>('/api/shared', signal ? { signal } : {}),
+}
+
+export const privacy = {
+  exportURL: () => '/api/me/export',
+  /** Erasure takes the account's own email as confirmation. Not undoable. */
+  erase: (confirm: string) =>
+    request<void>('/api/me', { method: 'DELETE', body: { confirm } }),
 }
 
 // --- M2: streaming connectors ------------------------------------------------

@@ -10,12 +10,15 @@ import { Playlists } from './routes/Playlists'
 import { PlaylistDetail } from './routes/PlaylistDetail'
 import { Settings } from './routes/Settings'
 import { Jobs } from './routes/Jobs'
+import { Crate } from './routes/Crate'
+import { Shared } from './routes/Shared'
 import { UpdatePrompt } from './pwa'
 
 const NAV = [
   { to: '/', label: 'Grove' },
+  { to: '/crate', label: 'Crate' },
   { to: '/playlists', label: 'Playlists' },
-  { to: '/jobs', label: 'Jobs' },
+  { to: '/shared', label: 'Shared' },
   { to: '/settings', label: 'You' },
 ]
 
@@ -90,6 +93,8 @@ export function App() {
 function Route({ path }: { path: string }) {
   if (path === '/') return <Grove />
   if (path === '/playlists') return <Playlists />
+  if (path === '/crate') return <Crate />
+  if (path === '/shared') return <Shared />
   if (path === '/jobs') return <Jobs />
   if (path === '/settings') return <Settings />
 
