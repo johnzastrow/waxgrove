@@ -15,9 +15,14 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Argon2id parameters. Deliberately explicit rather than tuned to this machine:
-// a self-hoster may be running a Raspberry Pi (N1), so memory is kept modest
-// while staying well above the OWASP floor.
+// Argon2id parameters. Deliberately explicit rather than tuned to whatever
+// machine happens to build this: a self-hoster may be on a small shared VPS
+// (N1), so memory is kept modest while staying well above the OWASP floor.
+//
+// 64 MiB is per hash, and concurrent logins multiply it. That is the intended
+// cost of a memory-hard KDF, not a leak — but it is also the single largest
+// allocation this program makes, so see scavenge.go for what happens to it
+// afterwards.
 const (
 	argonTime    = 3
 	argonMemory  = 64 * 1024 // 64 MiB

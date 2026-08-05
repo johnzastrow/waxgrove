@@ -518,12 +518,42 @@ possible, and the six interface consequences that follow from these constraints.
 
 | # | Requirement | Implication |
 |---|---|---|
-| N1 | **Low resources** | Must run comfortably on a Raspberry Pi or a $5 VPS. Rules out a JVM-scale runtime and a multi-container default deployment. |
+| N1 | **Low resources** | Must run comfortably on a $5 VPS alongside other services. Rules out a JVM-scale runtime and a multi-container default deployment. Measured, not aspirational — see [§5.1](#51-measured-memory-behaviour); `scripts/memcheck.sh` re-measures it. arm64 is no longer a build target (2026-08-05): amd64 is where this deploys. |
 | N2 | **Self-hostable by a non-expert** | Single artifact, zero external service dependencies to boot. `docker run` or one binary. |
 | N3 | **Mobile-first, not mobile-only** | The phone is the primary interaction and sets the design order — touch targets and small screens are solved first. **Desktop is a first-class target, not a fallback**: the PWA installs and runs on desktop too, and some tasks are genuinely better there (bulk crate curation, disambiguating a long import, editing a large playlist). Layouts must scale up deliberately — a stretched phone column is not a desktop design. |
 | N4 | **Open source** | **MIT** (decided 2026-08-03). Maximum reuse; permits closed forks, accepted deliberately. |
 | N5 | **Standards-based** | ISRC, MusicBrainz MBID, JSPF/XSPF, OAuth 2.0 + PKCE, OIDC where auth is delegated. |
 | N6 | **Degrades to zero connectors** | Full local + JSPF functionality with no provider linked. |
+
+### 5.1 Measured memory behaviour
+
+N1 is a claim, so it gets measured rather than asserted. `scripts/memcheck.sh`
+drives the real container under load and reports two different numbers, because
+conflating them leads to buying RAM you do not need:
+
+- **anon** — memory that cannot be reclaimed under pressure. This is what
+  decides host sizing.
+- **cgroup peak** — the high-water mark including page cache. Page cache is
+  reclaimable, so a large peak on an idle host is not pressure. It is reported
+  because it is what `docker stats` shows.
+
+**The Argon2 interaction is the whole story.** Argon2id allocates 64 MiB per
+password hash, deliberately (§6). Go's collector runs as the heap grows toward
+its goal, and an instance between logins allocates almost nothing — so that
+64 MiB is never collected, let alone returned. Measured before the fix: 67 MiB
+resident at boot (the timing placeholder in `auth.init()` is itself a full
+hash), 132 MiB after one registration, and flat there indefinitely, none of it
+live.
+
+`GOMEMLIMIT` does not address this. It is a ceiling: at 132 MiB against a
+180 MiB limit the runtime is correct to do nothing, and setting it low enough
+to force collection makes it thrash during the login burst it exists to
+survive. `internal/auth/scavenge.go` instead collects once hashing goes quiet —
+a burst pushes the timer back and pays nothing. Container settles at ~4.5 MiB.
+
+The consequence for sizing: **idle cost is negligible; the headroom exists for
+concurrent logins.** Sizing this instance by its idle figure would be a mistake
+in the other direction.
 
 ---
 
