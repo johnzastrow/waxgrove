@@ -86,30 +86,41 @@ restart_clean() {
   exit 1
 }
 
-# Samples anon memory while a workload runs, and reports the maximum seen.
+# Samples anon memory while a workload runs, and records the maximum seen.
 # Sampling (rather than reading the kernel's peak) is what isolates anon from
 # page cache; at 50ms it comfortably catches an Argon2 hash, which takes
 # roughly an order of magnitude longer.
-sample_anon_max() {
-  local p="$1" pidfile="$2" max=0 cur
-  while [ -f "$pidfile" ]; do
+#
+# Deliberately NOT wrapped in a command substitution. A backgrounded sampler
+# inherits the substitution's pipe, so `$(...)` blocks until the sampler exits
+# even after the workload is done — which reads as a hang, not a bug.
+# Everything here communicates through files and a global instead.
+SAMPLED_MAX=0
+
+sampler_loop() {
+  local p="$1" stopfile="$2" max=0 outfile="$3" cur
+  while [ -e "$stopfile" ]; do
     cur="$(read_anon "$p")"
-    [ "${cur:-0}" -gt "$max" ] 2>/dev/null && max="$cur"
+    if [ "${cur:-0}" -gt "$max" ] 2>/dev/null; then max="$cur"; fi
     sleep "0.$(printf '%03d' "$SAMPLE_MS")"
   done
-  echo "$max"
+  echo "$max" > "$outfile"
 }
 
 with_sampling() {
   local p="$1"; shift
-  local pidfile; pidfile="$(mktemp)"
-  local maxfile; maxfile="$(mktemp)"
-  ( sample_anon_max "$p" "$pidfile" > "$maxfile" ) &
+  local stopfile maxfile
+  stopfile="$(mktemp)"
+  maxfile="$(mktemp)"
+
+  sampler_loop "$p" "$stopfile" "$maxfile" &
   local sampler=$!
+
   "$@"
-  rm -f "$pidfile"
+
+  rm -f "$stopfile"
   wait "$sampler" 2>/dev/null
-  cat "$maxfile"
+  SAMPLED_MAX="$(cat "$maxfile" 2>/dev/null || echo 0)"
   rm -f "$maxfile"
 }
 
@@ -199,10 +210,10 @@ scenario() {
   [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && return 0
 
   restart_clean
-  local p; p="$(cgroup_path)" || { echo "no cgroup"; return 1; }
+  local p; p="$(cgroup_path)" || { echo "   $name: cgroup not found, skipped" >&2; return 1; }
   seed_user
-  local peak; peak="$(with_sampling "$p" "$@")"
-  report "$name" "$p" "$peak"
+  with_sampling "$p" "$@"
+  report "$name" "$p" "$SAMPLED_MAX"
 }
 
 say "Waxgrove memory check   limit=$LIMIT  port=$PORT"
