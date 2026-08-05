@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/johnzastrow/waxgrove/internal/auth"
+	"github.com/johnzastrow/waxgrove/internal/connector"
+	"github.com/johnzastrow/waxgrove/internal/crypto"
 	"github.com/johnzastrow/waxgrove/internal/domain"
+	"github.com/johnzastrow/waxgrove/internal/jobs"
 	"github.com/johnzastrow/waxgrove/internal/jspf"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
@@ -21,9 +24,20 @@ import (
 type API struct {
 	Store    *sqlite.Store
 	Resolver *resolve.Resolver
-	Remote   RemoteSearch // nil when no connector is configured (N6)
+	Remote   RemoteSearch // nil when no metadata source is configured (N6)
 	Env      string
 	Secure   bool // set Secure on cookies; false only for local http development
+
+	// Spotify and Jobs are nil on an instance with no connector. N6 makes that
+	// a supported configuration rather than a broken one, so the routes are
+	// simply not registered instead of registering and failing.
+	Spotify *connector.Spotify
+	Jobs    *jobs.Runner
+	Sealer  *crypto.Sealer
+
+	// pending holds in-flight OAuth attempts. Built lazily by Mount so a
+	// zero-value API is still usable in tests.
+	pending *authStore
 }
 
 // RemoteSearch is the slice of MusicBrainz that F5 needs.
@@ -62,6 +76,10 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("GET /api/playlists/{id}/history", a.authed(a.history))
 	mux.Handle("GET /api/playlists/{id}/export.jspf", a.authed(a.exportJSPF))
 	mux.Handle("POST /api/playlists/import", a.authed(a.importJSPF))
+
+	// Provider routes, only when a connector is wired (N6).
+	a.pending = newAuthStore()
+	a.mountConnect(mux)
 }
 
 // ------------------------------------------------------------- middleware --

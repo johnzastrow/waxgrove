@@ -17,12 +17,15 @@ import (
 	"time"
 
 	"github.com/johnzastrow/waxgrove/internal/config"
+	"github.com/johnzastrow/waxgrove/internal/connector"
 	"github.com/johnzastrow/waxgrove/internal/crypto"
 	"github.com/johnzastrow/waxgrove/internal/httpapi"
+	"github.com/johnzastrow/waxgrove/internal/jobs"
 	"github.com/johnzastrow/waxgrove/internal/memlimit"
 	"github.com/johnzastrow/waxgrove/internal/musicbrainz"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
+	"github.com/johnzastrow/waxgrove/internal/spotify"
 	"github.com/johnzastrow/waxgrove/internal/webui"
 )
 
@@ -124,7 +127,8 @@ func run() error {
 	slog.Info("configuration loaded", "config", cfg.Redacted())
 
 	// Fail at startup if the key is unusable, rather than at first token write.
-	if _, err := crypto.NewSealerFromBase64(cfg.SecretKeyB64); err != nil {
+	sealer, err := crypto.NewSealerFromBase64(cfg.SecretKeyB64)
+	if err != nil {
 		return fmt.Errorf("secret key: %w", err)
 	}
 
@@ -148,12 +152,35 @@ func run() error {
 		slog.Info("running with no metadata source; local catalogue and JSPF only")
 	}
 
+	resolver := resolve.New(store.Records(), remoteOrNil(remote))
+
+	// The Spotify connector, and the job runner that drives it. Both are
+	// optional: N6 makes an instance with no connector a supported
+	// configuration, and the routes are simply not registered without one.
+	var (
+		spotifyConn *connector.Spotify
+		runner      *jobs.Runner
+	)
+	if cfg.SpotifyEnabled {
+		spotifyConn = connector.NewSpotify(
+			spotify.New(), store.Credentials(sealer), store.ProviderRefs(), cfg.BaseURL)
+		runner = jobs.NewRunner(store, spotifyConn, resolver)
+		go runner.Start(ctx)
+		slog.Info("spotify connector enabled",
+			"redirect_uri", spotifyConn.RedirectURI())
+	} else {
+		slog.Info("running with no streaming connector; JSPF import and export only")
+	}
+
 	api := &httpapi.API{
 		Store:    store,
-		Resolver: resolve.New(store.Records(), remoteOrNil(remote)),
+		Resolver: resolver,
 		Remote:   searchOrNil(remote),
 		Env:      cfg.Environment,
 		Secure:   cfg.Environment == "production",
+		Spotify:  spotifyConn,
+		Jobs:     runner,
+		Sealer:   sealer,
 	}
 
 	// The PWA is served from the same binary and the same origin, which is what

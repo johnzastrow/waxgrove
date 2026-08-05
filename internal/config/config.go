@@ -29,6 +29,12 @@ type Config struct {
 	// genuinely disables the connector rather than merely hiding it — the
 	// binary wires a nil remote and the resolution ladder runs local-only.
 	MetadataSource string
+	// SpotifyEnabled turns the Spotify connector on. Off by default: an
+	// instance is fully useful with no connector at all (N6), and a feature
+	// that needs every user to register their own Spotify app should be a
+	// deliberate choice by the operator rather than something that appears.
+	SpotifyEnabled bool
+
 	// Contact is published in the MusicBrainz User-Agent. MusicBrainz requires
 	// a way to reach an operator whose instance misbehaves, so enabling the
 	// connector without one is refused rather than silently sending junk.
@@ -59,6 +65,7 @@ func Load() (*Config, error) {
 		InviteOnly:   envBool("WAXGROVE_INVITE_ONLY", true), // §6: friends app, not a public service
 
 		MetadataSource: env("WAXGROVE_METADATA_SOURCE", MetadataMusicBrainz),
+		SpotifyEnabled: envBool("WAXGROVE_SPOTIFY", false),
 		Contact:        os.Getenv("WAXGROVE_CONTACT"),
 	}
 
@@ -95,9 +102,10 @@ func Load() (*Config, error) {
 
 // Redacted renders the config for logging with no secret material in it.
 func (c *Config) Redacted() string {
-	return fmt.Sprintf("addr=%s db=%s base=%s env=%s invite_only=%t metadata=%s secret_key=[set,%d chars]",
+	return fmt.Sprintf(
+		"addr=%s db=%s base=%s env=%s invite_only=%t metadata=%s spotify=%t secret_key=[set,%d chars]",
 		c.Addr, c.DatabaseURL, c.BaseURL, c.Environment, c.InviteOnly,
-		c.MetadataSource, len(c.SecretKeyB64))
+		c.MetadataSource, c.SpotifyEnabled, len(c.SecretKeyB64))
 }
 
 func env(k, def string) string {

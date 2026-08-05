@@ -137,6 +137,76 @@ const (
 	OpRename  RevisionOp = "rename"
 )
 
+// JobState tracks a long provider operation (F22).
+type JobState string
+
+const (
+	JobQueued    JobState = "queued"
+	JobRunning   JobState = "running"
+	JobPaused    JobState = "paused"
+	JobDone      JobState = "done"
+	JobFailed    JobState = "failed"
+	JobCancelled JobState = "cancelled"
+)
+
+// Job kinds.
+const (
+	JobImport = "import"
+	JobExport = "export"
+)
+
+// Job is a resumable provider operation with visible progress.
+//
+// Provider work is a job rather than a request because a cold export can exceed
+// a minute (§7), and because a self-hosted box restarts for updates — progress
+// that lives only in a goroutine is progress the user loses.
+type Job struct {
+	ID         string
+	Kind       string
+	State      JobState
+	UserID     string
+	PlaylistID string
+	Service    string
+	Storefront string
+	// SourceRef is what the user pasted, for an import. Persisted so a job
+	// requeued after a restart still knows what it was importing.
+	SourceRef string
+	Done      int
+	Total     int
+	Error     string
+	CreatedAt string
+	UpdatedAt string
+	Items     []JobItem
+}
+
+// Terminal reports whether a job has finished, however it finished.
+func (j Job) Terminal() bool {
+	switch j.State {
+	case JobDone, JobFailed, JobCancelled:
+		return true
+	}
+	return false
+}
+
+// Job item outcomes. Everything except JobItemOK is a track the user needs to
+// know about (F15).
+const (
+	JobItemOK          = "ok"
+	JobItemUnavailable = "unavailable" // not on that service in that storefront
+	JobItemUnresolved  = "unresolved"  // Waxgrove could not identify it at all
+	JobItemFailed      = "failed"
+)
+
+// JobItem is the outcome for one track. Failures are recorded, never dropped:
+// partial success is the normal result of an export, and a quietly shorter
+// playlist is the worst way to deliver it (F15).
+type JobItem struct {
+	Position int
+	RecordID string
+	Status   string
+	Detail   string
+}
+
 // Revision is one entry in a playlist's append-only content history (F17).
 // ActorID is empty when the author has been anonymised (BR-4).
 type Revision struct {
