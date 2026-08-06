@@ -32,6 +32,12 @@ type fakeSpotify struct {
 	searchHits   map[string]string // ISRC or text -> uri; a miss means unavailable
 	failCreate   bool
 	playlistGone bool
+
+	// Export state, so a second export can be seen to reuse the first playlist.
+	created      int      // how many playlists have been created
+	replacedURIs []string // what the last PUT wrote
+	snapshot     string   // moves on every modification, as Spotify's does
+	targetGone   bool     // the exported playlist was deleted on Spotify
 }
 
 func newFakeSpotify(t *testing.T) *fakeSpotify {
@@ -50,16 +56,30 @@ func newFakeSpotify(t *testing.T) *fakeSpotify {
 	mux.HandleFunc("GET /playlists/{id}", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		gone := f.playlistGone
+		targetGone := f.targetGone && r.PathValue("id") == "new-provider-playlist"
+		snap := f.snapshot
 		f.mu.Unlock()
-		if gone {
+		if gone || targetGone {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":{"message":"Not found."}}`))
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": r.PathValue("id"), "name": "From Spotify",
-			"owner": map[string]any{"id": "spotify-user"},
+			"owner": map[string]any{"id": "spotify-user"}, "snapshot_id": snap,
 		})
+	})
+	mux.HandleFunc("PUT /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			URIs []string `json:"uris"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.replacedURIs = body.URIs
+		f.snapshot = f.snapshot + "+" // any write moves the snapshot on
+		snap := f.snapshot
+		f.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"snapshot_id": snap})
 	})
 	mux.HandleFunc("GET /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -99,6 +119,8 @@ func newFakeSpotify(t *testing.T) *fakeSpotify {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		f.createdName = body.Name
+		f.created++
+		f.snapshot = "snap1"
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "new-provider-playlist"})
 	})
 	mux.HandleFunc("POST /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +143,25 @@ func (f *fakeSpotify) added() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.addedURIs...)
+}
+
+func (f *fakeSpotify) createdCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.created
+}
+
+func (f *fakeSpotify) replaced() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.replacedURIs...)
+}
+
+// editedElsewhere simulates the user reordering the playlist in Spotify.
+func (f *fakeSpotify) editedElsewhere() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapshot = "edited-by-hand"
 }
 
 type harness struct {
@@ -375,6 +416,9 @@ func TestExportWritesThePlaylistAndRecordsTheSync(t *testing.T) {
 	sync, err := h.store.Syncs().Get(ctx, pl.ID, sqlite.ServiceSpotify, "GB")
 	if err != nil {
 		t.Fatalf("no sync recorded: %v", err)
+	}
+	if sync.ProviderSnapshot == "" {
+		t.Error("no provider snapshot recorded; divergence cannot be detected without one")
 	}
 	if sync.ProviderPlaylistID != "new-provider-playlist" {
 		t.Errorf("provider id = %q", sync.ProviderPlaylistID)
@@ -652,5 +696,149 @@ func TestPurgeRemovesOnlyFinishedJobs(t *testing.T) {
 	}
 	if _, err := h.store.Jobs().Get(ctx, live.ID); err != nil {
 		t.Errorf("the queued job was purged: %v", err)
+	}
+}
+
+// -------------------------------------------------------------- re-syncing --
+
+// The defect this replaced: every export created a new Spotify playlist, so
+// exporting twice left the user with two.
+func TestSecondExportUpdatesTheSamePlaylist(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	pl := h.seedPlaylist(t, "AA00000000001", "AA00000000002")
+	h.fake.searchHits["AA00000000001"] = "spotify:track:one"
+	h.fake.searchHits["AA00000000002"] = "spotify:track:two"
+
+	job, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	if done := h.runToCompletion(t, job.ID); done.State != domain.JobDone {
+		t.Fatalf("first export: %s %q", done.State, done.Error)
+	}
+	if n := h.fake.createdCount(); n != 1 {
+		t.Fatalf("created %d playlists on the first export, want 1", n)
+	}
+
+	job2, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	if done := h.runToCompletion(t, job2.ID); done.State != domain.JobDone {
+		t.Fatalf("second export: %s %q", done.State, done.Error)
+	}
+
+	if n := h.fake.createdCount(); n != 1 {
+		t.Errorf("created %d playlists after two exports — the second should have "+
+			"updated the first", n)
+	}
+	if got := h.fake.replaced(); len(got) != 2 {
+		t.Errorf("replaced with %v, want both tracks written to the existing playlist", got)
+	}
+}
+
+// D10: a copy edited on the provider side must not be silently overwritten.
+func TestReSyncRefusesWhenTheCopyWasEditedElsewhere(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	pl := h.seedPlaylist(t, "AA00000000001")
+	h.fake.searchHits["AA00000000001"] = "spotify:track:one"
+
+	job, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	h.runToCompletion(t, job.ID)
+
+	h.fake.editedElsewhere()
+
+	job2, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	done := h.runToCompletion(t, job2.ID)
+	if done.State != domain.JobFailed {
+		t.Fatalf("state = %s, want failed — the copy was edited on Spotify", done.State)
+	}
+	if !strings.Contains(done.Error, "edited") {
+		t.Errorf("error = %q, want it to say the copy was edited", done.Error)
+	}
+
+	// And it is recorded, so the UI can offer the choice rather than just
+	// failing again next time.
+	sync, err := h.store.Syncs().Get(ctx, pl.ID, sqlite.ServiceSpotify, "GB")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if !sync.Diverged {
+		t.Error("divergence was not recorded")
+	}
+}
+
+// ...and the user can decide to overwrite anyway.
+func TestForcedReSyncOverwritesADivergedCopy(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	pl := h.seedPlaylist(t, "AA00000000001")
+	h.fake.searchHits["AA00000000001"] = "spotify:track:one"
+
+	job, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	h.runToCompletion(t, job.ID)
+	h.fake.editedElsewhere()
+
+	job2, _ := h.runner.QueueExport(ctx, ExportRequest{
+		UserID: h.userID, PlaylistID: pl.ID, Force: true,
+	})
+	done := h.runToCompletion(t, job2.ID)
+	if done.State != domain.JobDone {
+		t.Fatalf("forced re-sync: %s %q", done.State, done.Error)
+	}
+	if n := h.fake.createdCount(); n != 1 {
+		t.Errorf("a forced re-sync created %d playlists, want it to reuse the one", n)
+	}
+	// Divergence is cleared: the copy now matches again.
+	sync, _ := h.store.Syncs().Get(ctx, pl.ID, sqlite.ServiceSpotify, "GB")
+	if sync.Diverged {
+		t.Error("still marked diverged after a successful forced re-sync")
+	}
+}
+
+// A copy deleted on Spotify must not trap the user with an error they cannot
+// act on — Waxgrove makes a fresh one.
+func TestReSyncRecreatesAPlaylistDeletedOnSpotify(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	pl := h.seedPlaylist(t, "AA00000000001")
+	h.fake.searchHits["AA00000000001"] = "spotify:track:one"
+
+	job, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	h.runToCompletion(t, job.ID)
+
+	h.fake.mu.Lock()
+	h.fake.targetGone = true
+	h.fake.mu.Unlock()
+
+	job2, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	done := h.runToCompletion(t, job2.ID)
+	if done.State != domain.JobDone {
+		t.Fatalf("state = %s %q, want a fresh playlist to have been made", done.State, done.Error)
+	}
+	if n := h.fake.createdCount(); n != 2 {
+		t.Errorf("created %d playlists, want a replacement for the deleted one", n)
+	}
+}
+
+// Sync state answers "how far behind is the copy", not "is it synced" (F21).
+func TestSyncReportsHowFarBehindTheCopyIs(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	pl := h.seedPlaylist(t, "AA00000000001")
+	h.fake.searchHits["AA00000000001"] = "spotify:track:one"
+
+	job, _ := h.runner.QueueExport(ctx, ExportRequest{UserID: h.userID, PlaylistID: pl.ID})
+	h.runToCompletion(t, job.ID)
+
+	// Two more content changes on the Waxgrove side.
+	rec, _ := h.store.Records().Upsert(ctx, domain.Candidate{
+		Title: "Another", Artist: "Someone", ISRC: "AA00000000009",
+	}, domain.TierCurated)
+	updated, _ := h.store.Playlists().AddRecords(ctx, pl.ID, h.userID, []string{rec.ID})
+	updated, _ = h.store.Playlists().Rename(ctx, pl.ID, h.userID, "Renamed")
+
+	sync, err := h.store.Syncs().Get(ctx, pl.ID, sqlite.ServiceSpotify, "GB")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if got := sync.Behind(updated.CurrentRev); got != 2 {
+		t.Errorf("behind = %d, want 2 revisions", got)
 	}
 }

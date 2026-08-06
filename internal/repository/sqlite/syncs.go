@@ -27,6 +27,10 @@ type Sync struct {
 	ProviderPlaylistID string
 	LastSyncedRev      int
 	LastSyncedAt       time.Time
+	// ProviderSnapshot is the provider's own version marker as of our last
+	// write. If it has moved since, somebody edited the copy — which is the
+	// only reliable way to tell without diffing every track (D10).
+	ProviderSnapshot string
 	// Diverged means the copy was edited on the provider side. A re-sync must
 	// ask rather than overwrite — the same "never silently mismatch" principle
 	// that governs matching (§3.2, D10).
@@ -46,20 +50,21 @@ var ErrNoSync = errors.New("sqlite: no sync recorded")
 
 // Record notes a successful export.
 func (r *SyncRepo) Record(ctx context.Context, playlistID, service, storefront,
-	providerPlaylistID string, rev int) error {
+	providerPlaylistID, snapshot string, rev int) error {
 
 	_, err := r.s.Writer().ExecContext(ctx, `
 		INSERT INTO playlist_syncs
 		    (playlist_id, service, storefront, provider_playlist_id,
-		     last_synced_rev, last_synced_at, diverged)
-		VALUES (?, ?, ?, ?, ?, ?, 0)
+		     provider_snapshot, last_synced_rev, last_synced_at, diverged)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 0)
 		ON CONFLICT (playlist_id, service, storefront) DO UPDATE SET
 		    provider_playlist_id = excluded.provider_playlist_id,
+		    provider_snapshot    = excluded.provider_snapshot,
 		    last_synced_rev      = excluded.last_synced_rev,
 		    last_synced_at       = excluded.last_synced_at,
 		    diverged             = 0`,
 		playlistID, service, storefront, nullStr(providerPlaylistID),
-		rev, nowRFC3339())
+		nullStr(snapshot), rev, nowRFC3339())
 	return err
 }
 
@@ -75,27 +80,27 @@ func (r *SyncRepo) MarkDiverged(ctx context.Context, playlistID, service, storef
 // Get returns one sync relationship.
 func (r *SyncRepo) Get(ctx context.Context, playlistID, service, storefront string) (Sync, error) {
 	var (
-		s          Sync
-		providerID sql.NullString
-		syncedAt   sql.NullString
-		rev        sql.NullInt64
-		diverged   int
+		s                  Sync
+		providerID         sql.NullString
+		snapshot, syncedAt sql.NullString
+		rev                sql.NullInt64
+		diverged           int
 	)
 	err := r.s.Reader().QueryRowContext(ctx, `
 		SELECT playlist_id, service, storefront, provider_playlist_id,
-		       last_synced_rev, last_synced_at, diverged
+		       provider_snapshot, last_synced_rev, last_synced_at, diverged
 		  FROM playlist_syncs
 		 WHERE playlist_id = ? AND service = ? AND storefront = ?`,
 		playlistID, service, storefront).
 		Scan(&s.PlaylistID, &s.Service, &s.Storefront, &providerID,
-			&rev, &syncedAt, &diverged)
+			&snapshot, &rev, &syncedAt, &diverged)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Sync{}, ErrNoSync
 	}
 	if err != nil {
 		return Sync{}, err
 	}
-	s.ProviderPlaylistID = providerID.String
+	s.ProviderPlaylistID, s.ProviderSnapshot = providerID.String, snapshot.String
 	s.LastSyncedRev = int(rev.Int64)
 	s.Diverged = diverged == 1
 	if syncedAt.Valid {
@@ -108,7 +113,7 @@ func (r *SyncRepo) Get(ctx context.Context, playlistID, service, storefront stri
 func (r *SyncRepo) ListForPlaylist(ctx context.Context, playlistID string) ([]Sync, error) {
 	rows, err := r.s.Reader().QueryContext(ctx, `
 		SELECT playlist_id, service, storefront, provider_playlist_id,
-		       last_synced_rev, last_synced_at, diverged
+		       provider_snapshot, last_synced_rev, last_synced_at, diverged
 		  FROM playlist_syncs WHERE playlist_id = ?`, playlistID)
 	if err != nil {
 		return nil, err
@@ -118,17 +123,17 @@ func (r *SyncRepo) ListForPlaylist(ctx context.Context, playlistID string) ([]Sy
 	var out []Sync
 	for rows.Next() {
 		var (
-			s          Sync
-			providerID sql.NullString
-			syncedAt   sql.NullString
-			rev        sql.NullInt64
-			diverged   int
+			s                  Sync
+			providerID         sql.NullString
+			snapshot, syncedAt sql.NullString
+			rev                sql.NullInt64
+			diverged           int
 		)
 		if err := rows.Scan(&s.PlaylistID, &s.Service, &s.Storefront, &providerID,
-			&rev, &syncedAt, &diverged); err != nil {
+			&snapshot, &rev, &syncedAt, &diverged); err != nil {
 			return nil, err
 		}
-		s.ProviderPlaylistID = providerID.String
+		s.ProviderPlaylistID, s.ProviderSnapshot = providerID.String, snapshot.String
 		s.LastSyncedRev = int(rev.Int64)
 		s.Diverged = diverged == 1
 		if syncedAt.Valid {

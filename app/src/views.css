@@ -293,3 +293,24 @@ textarea {
 .comment-head .when { font-size: .68rem; color: var(--cream-300); opacity: .7; }
 .comment-head .btn { margin-left: auto; }
 .comments .body { font-size: .9rem; margin-top: .2rem; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------ sync + forks (M3) -- */
+
+.provenance { margin: -.3rem 0 .6rem; }
+
+/* "Synced" is not a boolean (F21), so this states which of three situations
+   the copy is actually in rather than showing a tick. */
+.sync-state {
+  font-size: .82rem; color: var(--cream-300);
+  margin: .4rem 0 .2rem; padding: .5rem .7rem;
+  border-left: 2px solid var(--grove-500); background: rgba(61,86,56,.1);
+  border-radius: 0 3px 3px 0;
+}
+.sync-state.diverged {
+  border-left-color: var(--ember); background: rgba(168,81,42,.1);
+  color: var(--cream-200);
+}
+.sync-state strong { color: var(--cream-100); }
+
+.shelf-row { display: flex; align-items: center; gap: .5rem; }
+.shelf-row .shelf-item { flex: 1; min-width: 0; }

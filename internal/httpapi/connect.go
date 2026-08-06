@@ -82,6 +82,7 @@ func (a *API) mountConnect(mux *http.ServeMux) {
 
 	mux.Handle("POST /api/import/spotify", a.authed(a.spotifyImport))
 	mux.Handle("POST /api/playlists/{id}/export/spotify", a.authed(a.spotifyExport))
+	mux.Handle("GET /api/playlists/{id}/syncs", a.authed(a.playlistSyncs))
 
 	mux.Handle("GET /api/jobs", a.authed(a.listJobs))
 	mux.Handle("GET /api/jobs/{id}", a.authed(a.getJob))
@@ -215,14 +216,49 @@ func (a *API) spotifyExport(w http.ResponseWriter, r *http.Request, u *domain.Us
 	if _, ok := a.ownedOr404(w, r, u); !ok {
 		return
 	}
+	// force is only ever set because the user was shown the divergence and
+	// chose to overwrite (D10).
+	force := r.URL.Query().Get("force") == "true"
 	job, err := a.Jobs.QueueExport(r.Context(), jobs.ExportRequest{
-		UserID: u.ID, PlaylistID: r.PathValue("id"),
+		UserID: u.ID, PlaylistID: r.PathValue("id"), Force: force,
 	})
 	if err != nil {
 		internal(w, "queue export", err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, jobView(job))
+}
+
+// playlistSyncs reports where this playlist has been sent and how far behind
+// each copy is (F21).
+//
+// "Synced" is not a boolean: a playlist synced at revision 4 and since edited
+// twice is a different situation from one that is up to date, and only the user
+// can decide whether that matters.
+func (a *API) playlistSyncs(w http.ResponseWriter, r *http.Request, _ *domain.User) {
+	id := r.PathValue("id")
+	playlist, err := a.Store.Playlists().Get(r.Context(), id)
+	if err != nil {
+		problem(w, http.StatusNotFound, "playlist not found")
+		return
+	}
+	syncs, err := a.Store.Syncs().ListForPlaylist(r.Context(), id)
+	if err != nil {
+		internal(w, "list syncs", err)
+		return
+	}
+	out := make([]map[string]any, 0, len(syncs))
+	for _, s := range syncs {
+		out = append(out, map[string]any{
+			"service": s.Service, "storefront": s.Storefront,
+			"provider_playlist_id": s.ProviderPlaylistID,
+			"last_synced_rev":      s.LastSyncedRev,
+			"last_synced_at":       s.LastSyncedAt,
+			"behind":               s.Behind(playlist.CurrentRev),
+			"diverged":             s.Diverged,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"syncs": out})
 }
 
 // -------------------------------------------------------------------- jobs --

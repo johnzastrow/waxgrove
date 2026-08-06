@@ -5,7 +5,7 @@ import type {
   AddTracksResponse, Annotations, Candidate, CommitResponse, ConnectStatus,
   CrateItem, CrateResponse, HistoryResponse, ImportResponse, InviteResponse, Job,
   JobsResponse, Playlist, PlaylistsResponse, RecordsResponse, RemoteResponse,
-  SharedResponse, User,
+  SharedResponse, SyncsResponse, User,
 } from './types'
 
 /**
@@ -125,6 +125,10 @@ export const api = {
 
   deletePlaylist: (id: string) =>
     request<void>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Copy somebody's playlist into one of your own, with provenance (F20). */
+  fork: (id: string) =>
+    request<Playlist>(`/api/playlists/${encodeURIComponent(id)}/fork`, { method: 'POST' }),
 
   addTracks: (id: string, candidates: Candidate[]) =>
     request<AddTracksResponse>(`/api/playlists/${encodeURIComponent(id)}/tracks`, {
@@ -275,9 +279,20 @@ export const jobsApi = {
   importSpotify: (link: string) =>
     request<Job>('/api/import/spotify', { method: 'POST', body: { link } }),
 
-  exportSpotify: (playlistID: string) =>
-    request<Job>(`/api/playlists/${encodeURIComponent(playlistID)}/export/spotify`,
+  /**
+   * Send a playlist to Spotify. Re-exporting updates the copy Waxgrove already
+   * made rather than creating a second one; force overwrites a copy that has
+   * been edited on Spotify, and is only ever set because the user was asked.
+   */
+  exportSpotify: (playlistID: string, force = false) =>
+    request<Job>(
+      `/api/playlists/${encodeURIComponent(playlistID)}/export/spotify${force ? '?force=true' : ''}`,
       { method: 'POST' }),
+
+  /** Where this playlist has been sent, and how far behind each copy is (F21). */
+  syncs: (playlistID: string, signal?: AbortSignal) =>
+    request<SyncsResponse>(`/api/playlists/${encodeURIComponent(playlistID)}/syncs`,
+      signal ? { signal } : {}),
 
   list: (signal?: AbortSignal) =>
     request<JobsResponse>('/api/jobs', signal ? { signal } : {}),

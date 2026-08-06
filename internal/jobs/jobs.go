@@ -19,6 +19,7 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/domain"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
+	"github.com/johnzastrow/waxgrove/internal/spotify"
 )
 
 // Runner executes queued jobs.
@@ -246,14 +247,22 @@ func describeCandidate(c domain.Candidate) string {
 type ExportRequest struct {
 	UserID     string
 	PlaylistID string
+	// Force overwrites a provider copy that has been edited elsewhere. Only
+	// ever set because a user was asked and said yes (D10).
+	Force bool
 }
 
 func (r *Runner) QueueExport(ctx context.Context, req ExportRequest) (*domain.Job, error) {
+	sourceRef := ""
+	if req.Force {
+		sourceRef = forceMarker
+	}
 	job, err := r.store.Jobs().NewJob(ctx, domain.Job{
 		Kind:       domain.JobExport,
 		UserID:     req.UserID,
 		PlaylistID: req.PlaylistID,
 		Service:    sqlite.ServiceSpotify,
+		SourceRef:  sourceRef,
 	})
 	if err != nil {
 		return nil, err
@@ -310,22 +319,28 @@ func (r *Runner) runExport(ctx context.Context, job *domain.Job) error {
 			len(playlist.Tracks), marketLabel(market))
 	}
 
-	providerID, added, err := r.spotify.CreateAndFill(ctx, app, tok, job.UserID,
-		playlist.Title, exportDescription(playlist), uris)
+	written, err := r.writePlaylist(ctx, job, app, tok, market, playlist, uris)
 	if err != nil {
 		// The playlist may exist with some tracks in it — record what we know
 		// so a retry does not start from a false assumption.
-		if providerID != "" {
+		if written.ProviderPlaylistID != "" {
 			_ = r.store.Syncs().Record(ctx, playlist.ID, sqlite.ServiceSpotify,
-				market, providerID, playlist.CurrentRev)
+				market, written.ProviderPlaylistID, written.Snapshot, playlist.CurrentRev)
 		}
-		return fmt.Errorf("added %d of %d tracks, then: %w", added, len(uris), err)
+		if errors.Is(err, connector.ErrDiverged) {
+			// Not a failure of ours. The user has to decide whether their edits
+			// on Spotify or this playlist wins.
+			_ = r.store.Syncs().MarkDiverged(ctx, playlist.ID, sqlite.ServiceSpotify, market)
+			return err
+		}
+		return fmt.Errorf("added %d of %d tracks, then: %w", written.Added, len(uris), err)
 	}
 
 	if err := r.store.Syncs().Record(ctx, playlist.ID, sqlite.ServiceSpotify,
-		market, providerID, playlist.CurrentRev); err != nil {
+		market, written.ProviderPlaylistID, written.Snapshot, playlist.CurrentRev); err != nil {
 		return err
 	}
+	added := written.Added
 	if unavailable > 0 {
 		// Not a failure. Partial success is the normal outcome of an export,
 		// and F15 requires saying so plainly rather than delivering a quietly
@@ -334,6 +349,34 @@ func (r *Runner) runExport(ctx context.Context, job *domain.Job) error {
 			"job", job.ID, "added", added, "unavailable", unavailable)
 	}
 	return nil
+}
+
+// forceMarker rides in the job's source_ref for an export, which is otherwise
+// unused by that kind. It has to persist, so that a force decision survives the
+// job being requeued after a restart.
+const forceMarker = "force"
+
+// writePlaylist updates the copy Waxgrove already made, or makes one.
+//
+// Re-using the existing playlist is what stops a second export producing a
+// second playlist on the user's account — the defect this replaced.
+func (r *Runner) writePlaylist(ctx context.Context, job *domain.Job,
+	app spotify.App, tok spotify.Token, market string,
+	playlist *domain.Playlist, uris []string) (connector.Written, error) {
+
+	sync, err := r.store.Syncs().Get(ctx, playlist.ID, sqlite.ServiceSpotify, market)
+	if err == nil && sync.ProviderPlaylistID != "" {
+		w, uerr := r.spotify.Update(ctx, app, tok, sync, uris, job.SourceRef == forceMarker)
+		if !errors.Is(uerr, connector.ErrGone) {
+			return w, uerr
+		}
+		// It was deleted on Spotify. Fall through and make a new one rather
+		// than trapping the user with an error they cannot act on.
+		slog.Info("the provider copy is gone; creating a fresh playlist",
+			"playlist", playlist.ID)
+	}
+	return r.spotify.CreateAndFill(ctx, app, tok,
+		playlist.Title, exportDescription(playlist), uris)
 }
 
 func exportDescription(p *domain.Playlist) string {

@@ -287,30 +287,92 @@ func (s *Spotify) cache(ctx context.Context, recordID, market, uri, status strin
 	_ = s.refs.Put(ctx, recordID, sqlite.ServiceSpotify, market, uri, status)
 }
 
-// CreateAndFill writes a playlist to Spotify and returns its id.
+// ErrDiverged means the provider copy was edited since Waxgrove last wrote it.
+//
+// Re-syncing would silently discard whatever the user did over there, which D10
+// forbids: the provider copy is a projection, but somebody's work is still
+// somebody's work. The caller asks; it does not decide.
+var ErrDiverged = errors.New("connector: the playlist on Spotify has been edited since it was last sent")
+
+// Written is the outcome of an export.
+type Written struct {
+	ProviderPlaylistID string
+	Snapshot           string
+	Added              int
+	Replaced           bool // updated an existing playlist rather than creating one
+}
+
+// CreateAndFill writes a playlist to Spotify.
 //
 // Tracks are added in batches, and the count actually added is returned even on
 // failure so an interrupted export resumes from what landed rather than
 // duplicating it.
 func (s *Spotify) CreateAndFill(ctx context.Context, app spotify.App, tok spotify.Token,
-	userID, name, description string, uris []string) (playlistID string, added int, err error) {
+	name, description string, uris []string) (Written, error) {
 
 	spotifyUserID, _, err := s.client.Me(ctx, app, tok)
 	if err != nil {
-		return "", 0, describe(err)
+		return Written{}, describe(err)
 	}
 	// Private by default. A playlist appearing publicly on someone's profile
 	// because an export defaulted that way is not a mistake to make once.
-	playlistID, err = s.client.CreatePlaylist(ctx, app, tok, spotifyUserID, name, description, false)
+	playlistID, err := s.client.CreatePlaylist(ctx, app, tok, spotifyUserID, name, description, false)
 	if err != nil {
-		return "", 0, describe(err)
+		return Written{}, describe(err)
 	}
-	added, err = s.client.AddTracks(ctx, app, tok, playlistID, uris)
+	added, err := s.client.AddTracks(ctx, app, tok, playlistID, uris)
+	out := Written{ProviderPlaylistID: playlistID, Added: added}
 	if err != nil {
-		return playlistID, added, describe(err)
+		return out, describe(err)
 	}
-	return playlistID, added, nil
+	if pl, err := s.client.GetPlaylist(ctx, app, tok, playlistID); err == nil {
+		out.Snapshot = pl.SnapshotID
+	}
+	return out, nil
 }
+
+// Update rewrites a playlist Waxgrove has already sent.
+//
+// This is what stops a second export producing a second playlist. It refuses if
+// the copy has moved since we last wrote it, unless the caller has explicitly
+// decided to overwrite — the user is the only one who can weigh their own edits
+// against a re-sync (D10).
+func (s *Spotify) Update(ctx context.Context, app spotify.App, tok spotify.Token,
+	sync sqlite.Sync, uris []string, force bool) (Written, error) {
+
+	current, err := s.client.GetPlaylist(ctx, app, tok, sync.ProviderPlaylistID)
+	if err != nil {
+		var st *spotify.ErrStatus
+		if errors.As(err, &st) && st.NotFound() {
+			// Deleted on the provider side. Nothing to update, and refusing
+			// would trap the user — so the caller creates a fresh one.
+			return Written{}, ErrGone
+		}
+		return Written{}, describe(err)
+	}
+
+	// A snapshot we never recorded cannot be compared, so it is not evidence of
+	// divergence — treating it as such would block every playlist synced before
+	// this check existed.
+	if !force && sync.ProviderSnapshot != "" && current.SnapshotID != sync.ProviderSnapshot {
+		return Written{}, ErrDiverged
+	}
+
+	snapshot, err := s.client.ReplaceTracks(ctx, app, tok, sync.ProviderPlaylistID, uris)
+	out := Written{
+		ProviderPlaylistID: sync.ProviderPlaylistID,
+		Snapshot:           snapshot,
+		Added:              len(uris),
+		Replaced:           true,
+	}
+	if err != nil {
+		return out, describe(err)
+	}
+	return out, nil
+}
+
+// ErrGone means the provider copy no longer exists.
+var ErrGone = errors.New("connector: that playlist is no longer on Spotify")
 
 // Session exposes a refreshed session to the job runner, which needs one for
 // the whole of an export rather than per call.

@@ -56,6 +56,8 @@ export interface Playlist {
   owner_id: string
   revision: number
   tracks: Track[]
+  /** Present only on a single-playlist fetch, and only if it is a fork. */
+  forked_from?: ForkSource
 }
 
 export type MatchMethod = 'isrc' | 'mbid' | 'mapper' | 'fuzzy' | ''
@@ -237,4 +239,30 @@ export interface PlaylistSummary {
 
 export interface SharedResponse {
   playlists: PlaylistSummary[]
+}
+
+// --- Re-sync and forking -----------------------------------------------------
+
+/** Where a playlist has been sent, and how far behind that copy is (F21). */
+export interface Sync {
+  service: string
+  storefront: string
+  provider_playlist_id: string
+  last_synced_rev: number
+  last_synced_at: string
+  /** Revisions the provider copy is behind. "Synced" is not a boolean. */
+  behind: number
+  /** Edited on the provider side; a re-sync must ask rather than overwrite. */
+  diverged: boolean
+}
+
+export interface SyncsResponse {
+  syncs: Sync[]
+}
+
+/** Where a forked playlist came from (F20). */
+export interface ForkSource {
+  id: string
+  title: string
+  owner: string
 }

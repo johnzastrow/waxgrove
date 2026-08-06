@@ -472,3 +472,63 @@ func TestErasureRemovesTheUserButNotTheCatalogue(t *testing.T) {
 		t.Errorf("an erased user's session still works: %d", rec.Code)
 	}
 }
+
+// ----------------------------------------------------------------- forking --
+
+// F20: a fork is a real playlist of your own, with a pointer back to where it
+// came from — without which it is indistinguishable from something you made.
+func TestForkCopiesAPlaylistWithProvenance(t *testing.T) {
+	ana := signedIn(t)
+	ben := second(t, ana)
+
+	pid := ana.mustJSON(ana.do("POST", "/api/playlists",
+		map[string]any{"title": "Ana's mix"}))["id"].(string)
+	ana.do("POST", "/api/playlists/"+pid+"/tracks", map[string]any{
+		"candidates": []map[string]any{
+			{"title": "Pink Moon", "artist": "Nick Drake", "isrc": "GBAYE0601498"},
+			{"title": "Dreams", "artist": "Fleetwood Mac", "isrc": "USWB10101368"},
+		},
+	})
+
+	rec := ben.do("POST", "/api/playlists/"+pid+"/fork", nil)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("fork: %d %s", rec.Code, rec.Body)
+	}
+	fork := ben.mustJSON(rec)
+	forkID := fork["id"].(string)
+
+	if len(fork["tracks"].([]any)) != 2 {
+		t.Errorf("the fork has %d tracks, want 2", len(fork["tracks"].([]any)))
+	}
+	// One revision for the whole fork: copying a playlist is one act.
+	if rev := fork["revision"].(float64); rev != 2 {
+		t.Errorf("revision = %v, want 2 (create, then one add)", rev)
+	}
+
+	full := ben.mustJSON(ben.do("GET", "/api/playlists/"+forkID, nil))
+	src, ok := full["forked_from"].(map[string]any)
+	if !ok {
+		t.Fatalf("the fork does not say where it came from: %v", full)
+	}
+	if src["id"] != pid || src["owner"] != "Ana" {
+		t.Errorf("provenance = %v, want Ana's playlist", src)
+	}
+
+	// It is Ben's now: he can change it, and Ana's is untouched.
+	if rec := ben.do("PATCH", "/api/playlists/"+forkID,
+		map[string]any{"title": "Ben's take"}); rec.Code != http.StatusOK {
+		t.Errorf("Ben renaming his own fork = %d, want 200", rec.Code)
+	}
+	if got := ana.mustJSON(ana.do("GET", "/api/playlists/"+pid, nil))["title"]; got != "Ana's mix" {
+		t.Errorf("Ana's playlist changed when Ben forked and renamed it: %v", got)
+	}
+}
+
+// A plain playlist must not claim provenance it does not have.
+func TestAPlainPlaylistHasNoForkProvenance(t *testing.T) {
+	c := signedIn(t)
+	pid := c.mustJSON(c.do("POST", "/api/playlists", map[string]any{"title": "Mine"}))["id"].(string)
+	if got := c.mustJSON(c.do("GET", "/api/playlists/"+pid, nil))["forked_from"]; got != nil {
+		t.Errorf("forked_from = %v, want absent", got)
+	}
+}

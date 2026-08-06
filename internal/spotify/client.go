@@ -202,6 +202,21 @@ func (c *Client) postJSON(ctx context.Context, app App, tok Token, url string, i
 	return c.doJSON(ctx, req, quotaKey(app), out)
 }
 
+// putJSON issues an authenticated PUT with a JSON body.
+func (c *Client) putJSON(ctx context.Context, app App, tok Token, url string, in, out any) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	return c.doJSON(ctx, req, quotaKey(app), out)
+}
+
 // IsAuthError reports whether an error means the user must reconnect.
 func IsAuthError(err error) bool {
 	return errors.Is(err, ErrNeedsReconnect) || errors.Is(err, ErrAuthDenied)

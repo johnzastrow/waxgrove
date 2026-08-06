@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, connect, jobsApi } from '../api/client'
-import type { Playlist, Revision } from '../api/types'
+import type { Playlist, Revision, Sync } from '../api/types'
 import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
 import { useSession } from '../state/session'
@@ -53,18 +53,20 @@ export function PlaylistDetail({ id }: { id: string }) {
   const [history, setHistory] = useState<Revision[] | null>(null)
   const [editing, setEditing] = useState(false)
   const [spotifyReady, setSpotifyReady] = useState(false)
+  const [syncs, setSyncs] = useState<Sync[]>([])
 
   useEffect(() => {
     connect.status()
       .then((st) => setSpotifyReady(!!st?.connected))
       .catch(() => setSpotifyReady(false))
-  }, [])
+    jobsApi.syncs(id).then((r) => setSyncs(r.syncs ?? [])).catch(() => setSyncs([]))
+  }, [id])
 
-  const exportToSpotify = async () => {
+  const exportToSpotify = async (force = false) => {
     setBusy(true)
     try {
-      await jobsApi.exportSpotify(id)
-      toast({ message: 'Exporting. Follow it on the Jobs screen.' })
+      await jobsApi.exportSpotify(id, force)
+      toast({ message: 'Sending. Follow it on the Jobs screen.' })
       navigate('/jobs')
     } catch (err) {
       toast({ message: err instanceof ApiError ? err.message : 'could not start the export', bad: true })
@@ -72,6 +74,21 @@ export function PlaylistDetail({ id }: { id: string }) {
       setBusy(false)
     }
   }
+
+  const fork = async () => {
+    setBusy(true)
+    try {
+      const copy = await api.fork(id)
+      toast({ message: `Copied into your own "${copy.title}".` })
+      navigate(`/playlists/${copy.id}`)
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not copy that', bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const spotifySync = syncs.find((s) => s.service === 'spotify')
 
   const load = useCallback((signal?: AbortSignal) => {
     api.playlist(id, signal)
@@ -205,6 +222,46 @@ export function PlaylistDetail({ id }: { id: string }) {
       )}
       {playlist.description && !editing && <p className="muted">{playlist.description}</p>}
 
+      {playlist.forked_from && (
+        <p className="small muted provenance">
+          Copied from{' '}
+          <Link to={`/playlists/${playlist.forked_from.id}`}>
+            {playlist.forked_from.title}
+          </Link>{' '}
+          by {playlist.forked_from.owner}
+        </p>
+      )}
+
+      {spotifySync && (
+        <p className={spotifySync.diverged ? 'sync-state diverged' : 'sync-state'}>
+          {spotifySync.diverged ? (
+            <>
+              <strong>This was edited on Spotify.</strong> Updating from here
+              would replace what you did over there.{' '}
+              {owned && (
+                <button
+                  type="button" className="linkish" disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(
+                      'Replace the Spotify copy with this playlist?\n\n' +
+                      'Whatever you changed on Spotify will be lost.')) {
+                      void exportToSpotify(true)
+                    }
+                  }}
+                >
+                  Replace it anyway
+                </button>
+              )}
+            </>
+          ) : spotifySync.behind > 0 ? (
+            <>The Spotify copy is {spotifySync.behind}{' '}
+            {spotifySync.behind === 1 ? 'revision' : 'revisions'} behind.</>
+          ) : (
+            <>The Spotify copy is up to date.</>
+          )}
+        </p>
+      )}
+
       <div className="row-actions">
         <a className="btn ghost" href={api.exportURL(playlist.id)} download>
           Export JSPF
@@ -213,9 +270,14 @@ export function PlaylistDetail({ id }: { id: string }) {
         {owned && spotifyReady && (
           <button type="button" className="btn ghost" disabled={busy}
                   onClick={() => void exportToSpotify()}>
-            Send to Spotify
+            {spotifySync ? 'Update on Spotify' : 'Send to Spotify'}
           </button>
         )}
+        {/* Forking is offered on anyone's playlist, including your own —
+            "make me a variant of this to mess with" is a real thing to want. */}
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => void fork()}>
+          Copy to mine
+        </button>
         {owned && !editing && (
           <button type="button" className="btn ghost" onClick={() => setEditing(true)}>
             Rename

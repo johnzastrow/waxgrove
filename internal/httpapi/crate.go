@@ -28,6 +28,7 @@ func (a *API) mountCrate(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/comments/{id}", a.authed(a.deleteComment))
 
 	mux.Handle("GET /api/shared", a.authed(a.sharedPlaylists))
+	mux.Handle("POST /api/playlists/{id}/fork", a.authed(a.forkPlaylist))
 
 	mux.Handle("GET /api/me/export", a.authed(a.exportMyData))
 	mux.Handle("DELETE /api/me", a.authed(a.eraseMe))
@@ -381,6 +382,25 @@ func (a *API) sharedPlaylists(w http.ResponseWriter, r *http.Request, u *domain.
 		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"playlists": out})
+}
+
+// forkPlaylist copies somebody's playlist into one of your own (F20).
+//
+// Deliberately available for any playlist, including your own: "make me a
+// variant of this to mess with" is a real thing to want, and refusing it would
+// be a rule with no purpose.
+func (a *API) forkPlaylist(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	src := r.PathValue("id")
+	if _, err := a.Store.Playlists().Get(r.Context(), src); err != nil {
+		problem(w, http.StatusNotFound, "playlist not found")
+		return
+	}
+	fork, err := a.Store.Playlists().Fork(r.Context(), src, u.ID)
+	if err != nil {
+		internal(w, "fork playlist", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, playlistView(fork))
 }
 
 // ------------------------------------------------------------------- views --

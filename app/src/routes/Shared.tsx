@@ -6,15 +6,30 @@
 // and a permissions model nobody asked for is a feature to maintain forever.
 
 import { useEffect, useState } from 'react'
-import { ApiError, discover } from '../api/client'
+import { ApiError, api, discover } from '../api/client'
 import type { PlaylistSummary } from '../api/types'
 import { Empty, ErrorNote, Loading } from '../components/bits'
 import { Ring } from '../components/Ring'
-import { Link } from '../router'
+import { Link, navigate, useToast } from '../router'
 
 export function Shared() {
+  const toast = useToast()
   const [items, setItems] = useState<PlaylistSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const fork = async (id: string) => {
+    setBusy(true)
+    try {
+      const copy = await api.fork(id)
+      toast({ message: `Copied into your own "${copy.title}".` })
+      navigate(`/playlists/${copy.id}`)
+    } catch (err) {
+      toast({ message: err instanceof ApiError ? err.message : 'could not copy that', bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   useEffect(() => {
     const ac = new AbortController()
@@ -48,7 +63,7 @@ export function Shared() {
       {items !== null && items.length > 0 && (
         <ul className="shelf">
           {items.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="shelf-row">
               <Link to={`/playlists/${p.id}`} className="shelf-item">
                 <Ring size={30} title="" />
                 <span className="meta">
@@ -60,6 +75,13 @@ export function Shared() {
                   </span>
                 </span>
               </Link>
+              <button
+                type="button" className="btn sm ghost" disabled={busy}
+                aria-label={`Copy ${p.title} into your own playlists`}
+                onClick={() => void fork(p.id)}
+              >
+                Copy
+              </button>
             </li>
           ))}
         </ul>

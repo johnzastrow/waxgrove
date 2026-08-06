@@ -156,6 +156,63 @@ func (r *PlaylistRepo) ListOwned(ctx context.Context, ownerID string) ([]domain.
 	return out, nil
 }
 
+// Fork copies somebody else's playlist into one of your own (F20).
+//
+// A fork is a real playlist that belongs to the forker — they can reorder it,
+// add to it, delete it — with a pointer back to where it came from. That
+// pointer is the whole point: without it a fork is indistinguishable from
+// something you made, and the person whose taste you copied disappears.
+//
+// The tracks are the same canonical records, not copies of them. That is what
+// the shared catalogue is for (§3.0): forking a 50-track playlist costs 50 rows
+// in playlist_tracks, not 50 duplicated songs.
+func (r *PlaylistRepo) Fork(ctx context.Context, sourceID, newOwnerID string) (*domain.Playlist, error) {
+	src, err := r.Get(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	fork, err := r.Create(ctx, newOwnerID, src.Title, src.Description)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.s.Writer().ExecContext(ctx,
+		`UPDATE playlists SET forked_from = ? WHERE id = ?`, sourceID, fork.ID); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(src.Tracks))
+	for _, t := range src.Tracks {
+		ids = append(ids, t.Record.ID)
+	}
+	if len(ids) == 0 {
+		return r.Get(ctx, fork.ID)
+	}
+	// One revision for the whole fork: copying a playlist is one act.
+	return r.AddRecords(ctx, fork.ID, newOwnerID, ids)
+}
+
+// ForkedFrom returns the playlist this one was forked from, if any.
+func (r *PlaylistRepo) ForkedFrom(ctx context.Context, id string) (sourceID, sourceTitle, sourceOwner string, err error) {
+	var srcID, title, owner sql.NullString
+	err = r.s.Reader().QueryRowContext(ctx, `
+		SELECT src.id, src.title, COALESCE(u.display_name, '')
+		  FROM playlists p
+		  JOIN playlists src ON src.id = p.forked_from
+		  LEFT JOIN users u ON u.id = src.owner_id
+		 WHERE p.id = ?`, id).Scan(&srcID, &title, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", "", nil // not a fork, which is not an error
+	}
+	if err != nil {
+		return "", "", "", err
+	}
+	if owner.String == "" {
+		owner.String = "a departed member"
+	}
+	return srcID.String, title.String, owner.String, nil
+}
+
 // ListShared returns everyone else's playlists, newest first (F9).
 //
 // Playlists are shared by reference across the instance (D8), so "shared" is

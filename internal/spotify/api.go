@@ -20,12 +20,17 @@ type Playlist struct {
 	Description string
 	OwnerID     string
 	Total       int
+	// SnapshotID changes whenever the playlist is modified, by anyone. It is
+	// what makes "has this been edited since we last wrote it?" answerable
+	// without diffing every track (D10).
+	SnapshotID string
 }
 
 type apiPlaylist struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	SnapshotID  string `json:"snapshot_id"`
 	Owner       struct {
 		ID string `json:"id"`
 	} `json:"owner"`
@@ -105,14 +110,15 @@ func isAlphanumeric(s string) bool {
 // GetPlaylist reads a playlist's metadata.
 func (c *Client) GetPlaylist(ctx context.Context, app App, tok Token, id string) (Playlist, error) {
 	var out apiPlaylist
-	u := fmt.Sprintf("%s/playlists/%s?fields=id,name,description,owner(id),tracks(total)",
+	u := fmt.Sprintf(
+		"%s/playlists/%s?fields=id,name,description,snapshot_id,owner(id),tracks(total)",
 		c.apiURL, url.PathEscape(id))
 	if err := c.get(ctx, app, tok, u, &out); err != nil {
 		return Playlist{}, err
 	}
 	return Playlist{
 		ID: out.ID, Name: out.Name, Description: out.Description,
-		OwnerID: out.Owner.ID, Total: out.Tracks.Total,
+		OwnerID: out.Owner.ID, Total: out.Tracks.Total, SnapshotID: out.SnapshotID,
 	}, nil
 }
 
@@ -286,6 +292,39 @@ func (c *Client) CreatePlaylist(ctx context.Context, app App, tok Token,
 
 // AddTracksBatchSize is Spotify's documented per-request maximum.
 const AddTracksBatchSize = 100
+
+// ReplaceTracks overwrites a playlist's contents and returns the new snapshot.
+//
+// PUT with the first batch replaces everything; subsequent batches append. Doing
+// it the other way round — clearing then adding — would leave the playlist
+// visibly empty for however long the fill takes, on somebody else's device.
+func (c *Client) ReplaceTracks(ctx context.Context, app App, tok Token,
+	playlistID string, uris []string) (snapshot string, err error) {
+
+	u := fmt.Sprintf("%s/playlists/%s/tracks", c.apiURL, url.PathEscape(playlistID))
+
+	first := uris
+	if len(first) > AddTracksBatchSize {
+		first = first[:AddTracksBatchSize]
+	}
+	var out struct {
+		SnapshotID string `json:"snapshot_id"`
+	}
+	if err := c.putJSON(ctx, app, tok, u, map[string]any{"uris": first}, &out); err != nil {
+		return "", err
+	}
+	if len(uris) > AddTracksBatchSize {
+		if _, err := c.AddTracks(ctx, app, tok, playlistID, uris[AddTracksBatchSize:]); err != nil {
+			return out.SnapshotID, err
+		}
+		// The appends moved it on again; re-read rather than reporting a
+		// snapshot that is already stale.
+		if pl, err := c.GetPlaylist(ctx, app, tok, playlistID); err == nil {
+			return pl.SnapshotID, nil
+		}
+	}
+	return out.SnapshotID, nil
+}
 
 // AddTracks appends track URIs, in batches.
 //

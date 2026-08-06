@@ -299,8 +299,14 @@ func (a *API) getPlaylist(w http.ResponseWriter, r *http.Request, _ *domain.User
 		internal(w, "get playlist", err)
 		return
 	}
+	v := playlistView(p)
+	// Where it came from, if anywhere. Attribution is the point of a fork
+	// (F20) — without it a fork is indistinguishable from something you made.
+	if srcID, title, owner, ferr := a.Store.Playlists().ForkedFrom(r.Context(), p.ID); ferr == nil && srcID != "" {
+		v["forked_from"] = map[string]any{"id": srcID, "title": title, "owner": owner}
+	}
 	// D8: playlists are shared by reference, so any member may read one.
-	writeJSON(w, http.StatusOK, playlistView(p))
+	writeJSON(w, http.StatusOK, v)
 }
 
 // ownedOr404 enforces write access. A non-owner gets 404 rather than 403 so the
