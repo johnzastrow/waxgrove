@@ -532,3 +532,95 @@ func TestAPlainPlaylistHasNoForkProvenance(t *testing.T) {
 		t.Errorf("forked_from = %v, want absent", got)
 	}
 }
+
+// ------------------------------------------------------- changing password --
+
+func TestChangePasswordAndSignInWithTheNewOne(t *testing.T) {
+	c := signedIn(t)
+	const newPassword = "a-much-better-passphrase"
+
+	rec := c.do("POST", "/api/me/password", map[string]any{
+		"current_password": goodPassword, "new_password": newPassword,
+	})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("change password: %d %s", rec.Code, rec.Body)
+	}
+
+	// The change ends every session, including this one.
+	if got := c.do("GET", "/api/me", nil); got.Code != http.StatusUnauthorized {
+		t.Errorf("still signed in after changing the password: %d", got.Code)
+	}
+	// The old password is dead.
+	if got := c.do("POST", "/api/login", map[string]any{
+		"email": "ana@example.test", "password": goodPassword,
+	}); got.Code != http.StatusUnauthorized {
+		t.Errorf("the old password still works: %d", got.Code)
+	}
+	// The new one works.
+	if got := c.do("POST", "/api/login", map[string]any{
+		"email": "ana@example.test", "password": newPassword,
+	}); got.Code != http.StatusOK {
+		t.Fatalf("cannot sign in with the new password: %d %s", got.Code, got.Body)
+	}
+}
+
+// A valid session is not enough. A password change is exactly what somebody
+// does with a borrowed laptop to make their access permanent.
+func TestChangePasswordRequiresTheCurrentOne(t *testing.T) {
+	c := signedIn(t)
+	rec := c.do("POST", "/api/me/password", map[string]any{
+		"current_password": "not-the-right-one", "new_password": "a-much-better-passphrase",
+	})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("= %d, want 403", rec.Code)
+	}
+	// Nothing changed, and the session survives a failed attempt.
+	if got := c.do("GET", "/api/me", nil); got.Code != http.StatusOK {
+		t.Errorf("a failed attempt ended the session: %d", got.Code)
+	}
+	if got := c.do("POST", "/api/login", map[string]any{
+		"email": "ana@example.test", "password": goodPassword,
+	}); got.Code != http.StatusOK {
+		t.Error("the existing password stopped working after a failed change")
+	}
+}
+
+func TestChangePasswordEnforcesTheLengthFloor(t *testing.T) {
+	c := signedIn(t)
+	rec := c.do("POST", "/api/me/password", map[string]any{
+		"current_password": goodPassword, "new_password": "short",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("= %d, want 400", rec.Code)
+	}
+	if got := c.do("GET", "/api/me", nil); got.Code != http.StatusOK {
+		t.Error("a rejected change ended the session")
+	}
+}
+
+// Changing a password must log out the other browser too — otherwise, if the
+// reason for changing it is that somebody else has it, the change is cosmetic.
+func TestChangePasswordEndsEveryOtherSession(t *testing.T) {
+	c := signedIn(t)
+
+	// A second sign-in for the same account, standing in for another device.
+	otherDevice := &client{t: t, h: c.h}
+	if rec := otherDevice.do("POST", "/api/login", map[string]any{
+		"email": "ana@example.test", "password": goodPassword,
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("second sign-in: %d", rec.Code)
+	}
+	if rec := otherDevice.do("GET", "/api/me", nil); rec.Code != http.StatusOK {
+		t.Fatalf("second session not usable: %d", rec.Code)
+	}
+
+	if rec := c.do("POST", "/api/me/password", map[string]any{
+		"current_password": goodPassword, "new_password": "a-much-better-passphrase",
+	}); rec.Code != http.StatusNoContent {
+		t.Fatalf("change: %d %s", rec.Code, rec.Body)
+	}
+
+	if rec := otherDevice.do("GET", "/api/me", nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("the other device is still signed in: %d", rec.Code)
+	}
+}

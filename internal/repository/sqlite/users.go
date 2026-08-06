@@ -152,6 +152,64 @@ func (r *UserRepo) Authenticate(ctx context.Context, email, password string) (*d
 	return r.Get(ctx, id)
 }
 
+// ChangePassword replaces a password, verifying the current one first.
+//
+// The current password is required even though the caller already holds a
+// valid session: a session is "this browser was logged in at some point", and a
+// password change is exactly the operation an attacker performs on a borrowed
+// laptop to make their access permanent. Re-proving the password is what turns
+// a stolen session from permanent into temporary.
+//
+// Every other session is ended. If the reason for changing a password is that
+// somebody else has one, leaving their session alive defeats the whole point —
+// so the change logs everyone out, including the caller, who signs back in.
+func (r *UserRepo) ChangePassword(ctx context.Context, userID, current, next string) error {
+	var hash string
+	var deleted sql.NullString
+	err := r.s.Reader().QueryRowContext(ctx,
+		`SELECT COALESCE(password_hash, ''), deleted_at FROM users WHERE id = ?`, userID).
+		Scan(&hash, &deleted)
+	if errors.Is(err, sql.ErrNoRows) || deleted.Valid {
+		return ErrCredentials
+	}
+	if err != nil {
+		return err
+	}
+	if hash == "" {
+		// An OIDC-only account has no password to change (D5).
+		return ErrNoPassword
+	}
+	if err := auth.VerifyPassword(ctx, current, hash); err != nil {
+		return ErrCredentials
+	}
+
+	// Hashed before the transaction: Argon2 takes real time, and §7.2 keeps
+	// slow work out of a write lock.
+	newHash, err := auth.HashPassword(ctx, next)
+	if err != nil {
+		return err // includes ErrWeak
+	}
+
+	tx, err := r.s.Writer().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE users SET password_hash = ? WHERE id = ?`, newHash, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM sessions WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ErrNoPassword means the account signs in another way and has none to change.
+var ErrNoPassword = errors.New("sqlite: this account has no password set")
+
 // Get loads a user by ID.
 func (r *UserRepo) Get(ctx context.Context, id string) (*domain.User, error) {
 	var u domain.User

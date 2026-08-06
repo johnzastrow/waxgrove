@@ -90,6 +90,15 @@ export const api = {
 
   createInvite: () => request<InviteResponse>('/api/invites', { method: 'POST' }),
 
+  /**
+   * Change the password. Ends every session including this one, so the caller
+   * must sign in again — that is the point, not a side effect.
+   */
+  changePassword: (current_password: string, new_password: string) =>
+    request<void>('/api/me/password', {
+      method: 'POST', body: { current_password, new_password },
+    }),
+
   // --- catalogue -------------------------------------------------------------
   /** Search the shared local catalogue. Ambient records stay out of this (F24). */
   searchRecords: (q: string, signal?: AbortSignal) =>

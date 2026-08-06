@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError, connect, privacy } from '../api/client'
 import type { ConnectStatus } from '../api/types'
 import { useSession } from '../state/session'
-import { ErrorNote, Loading } from '../components/bits'
+import { ErrorNote, Field, Loading } from '../components/bits'
 import { Connect } from '../components/Connect'
 import { navigate, useToast } from '../router'
 
@@ -113,6 +113,11 @@ export function Settings() {
       {spotify && <Connect status={spotify} onChange={setSpotify} />}
 
       <section className="card">
+        <p className="eyebrow">Password</p>
+        <ChangePassword />
+      </section>
+
+      <section className="card">
         <p className="eyebrow">Your data</p>
         <h3>Take it or leave</h3>
         <p className="small muted">
@@ -154,5 +159,69 @@ export function Settings() {
         </p>
       </section>
     </>
+  )
+}
+
+// ChangePassword is deliberately its own component with its own state: it ends
+// the session on success, so it cannot share error handling with anything that
+// expects to still be signed in afterwards.
+function ChangePassword() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+
+  if (done) {
+    return (
+      <>
+        <h3>Password changed</h3>
+        <p className="small muted">
+          Every device is signed out, including this one. Sign in again with the
+          new password.
+        </p>
+        <div className="row-actions">
+          <button type="button" className="btn" onClick={() => window.location.assign('/')}>
+            Sign in
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        setError(null)
+        setBusy(true)
+        api.changePassword(current, next)
+          .then(() => setDone(true))
+          .catch((err) =>
+            setError(err instanceof ApiError ? err.message : 'could not change the password'))
+          .finally(() => setBusy(false))
+      }}
+    >
+      <Field
+        label="Current password" type="password" value={current} required
+        autoComplete="current-password"
+        onChange={(e) => setCurrent(e.target.value)}
+      />
+      <Field
+        label="New password" type="password" value={next} required minLength={12}
+        autoComplete="new-password"
+        onChange={(e) => setNext(e.target.value)}
+      />
+      <p className="small muted">
+        At least 12 characters. Changing it signs out every device, including
+        this one — which is the point if somebody else knows the old one.
+      </p>
+      <ErrorNote error={error} />
+      <div className="row-actions">
+        <button type="submit" className="btn" disabled={busy || !current || next.length < 12}>
+          {busy ? 'Changing…' : 'Change password'}
+        </button>
+      </div>
+    </form>
   )
 }

@@ -61,6 +61,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /api/logout", a.authed(a.logout))
 	mux.Handle("GET /api/me", a.authed(a.me))
 	mux.Handle("POST /api/invites", a.authed(a.createInvite))
+	mux.Handle("POST /api/me/password", a.authed(a.changePassword))
 
 	mux.Handle("GET /api/records", a.authed(a.searchRecords))
 	mux.Handle("GET /api/records/remote", a.authed(a.searchRemote))
@@ -215,6 +216,41 @@ func (a *API) createInvite(w http.ResponseWriter, r *http.Request, u *domain.Use
 		"code":       code,
 		"expires_in": int(sqlite.InviteTTL.Seconds()),
 	})
+}
+
+// changePassword replaces the caller's password.
+//
+// It ends every session, including this one, so the client must sign in again.
+// That is the point rather than a side effect: if the reason for the change is
+// that somebody else knows the old password, leaving their session alive would
+// make the change cosmetic.
+func (a *API) changePassword(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	var in struct {
+		Current string `json:"current_password"`
+		New     string `json:"new_password"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	err := a.Store.Users().ChangePassword(r.Context(), u.ID, in.Current, in.New)
+	switch {
+	case errors.Is(err, auth.ErrWeak):
+		problem(w, http.StatusBadRequest,
+			"the new password must be at least "+strconv.Itoa(auth.MinPasswordLen)+" characters")
+		return
+	case errors.Is(err, sqlite.ErrCredentials):
+		problem(w, http.StatusForbidden, "that is not your current password")
+		return
+	case errors.Is(err, sqlite.ErrNoPassword):
+		problem(w, http.StatusConflict, "this account signs in another way")
+		return
+	case err != nil:
+		internal(w, "change password", err)
+		return
+	}
+	// Every session is gone, so the cookie this request arrived with is dead.
+	a.clearSession(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---------------------------------------------------------------- records --
