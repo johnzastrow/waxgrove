@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"strings"
@@ -163,7 +164,8 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 	// It costs a few hundred KB on an import, which happens rarely, and it
 	// cannot silently return nothing.
 	u := fmt.Sprintf("%s/playlists/%s", c.apiURL, url.PathEscape(id))
-	if err := c.get(ctx, app, tok, u, &out); err != nil {
+	raw, err := c.getRaw(ctx, app, tok, u, &out)
+	if err != nil {
 		return Playlist{}, nil, err
 	}
 
@@ -179,13 +181,19 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 		tracks = append(tracks, candidateFrom(*item.Track))
 	}
 
-	// A playlist that reports tracks but yielded none means the response shape
-	// was not what this expects. Saying so beats "that playlist is empty",
-	// which sends the user looking at the wrong thing entirely.
-	if len(tracks) == 0 && out.Tracks.Total > 0 {
-		return meta, nil, fmt.Errorf(
-			"spotify: the playlist reports %d tracks but returned none readable",
-			out.Tracks.Total)
+	// A playlist that yields no tracks is either genuinely empty or a response
+	// this code cannot read. Those need different answers from the user, and
+	// the only way to tell them apart is the body itself — which is why it is
+	// kept and logged here rather than reasoned about.
+	if len(tracks) == 0 {
+		slog.Warn("a spotify playlist read produced no tracks",
+			"playlist", id, "reported_total", out.Tracks.Total,
+			"body", Summarise(raw, 1200))
+		if out.Tracks.Total > 0 {
+			return meta, nil, fmt.Errorf(
+				"spotify: the playlist reports %d tracks but returned none readable",
+				out.Tracks.Total)
+		}
 	}
 
 	// Everything fitted in the one call.

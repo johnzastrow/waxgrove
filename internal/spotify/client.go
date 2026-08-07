@@ -231,6 +231,44 @@ func (c *Client) get(ctx context.Context, app App, tok Token, url string, out an
 	return c.doJSON(ctx, req, quotaKey(app), out)
 }
 
+// getRaw is get, but hands back the response body as well.
+//
+// A response that parses cleanly into a struct with nothing in it is the
+// hardest kind of failure to diagnose — there is no error to log and no field
+// to inspect. Keeping the bytes is the only way to find out what actually
+// arrived. Used where a successful-looking response can still be unusable.
+func (c *Client) getRaw(ctx context.Context, app App, tok Token, url string, out any) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+
+	var raw json.RawMessage
+	if err := c.doJSON(ctx, req, quotaKey(app), &raw); err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return raw, fmt.Errorf("spotify: malformed response: %w", err)
+	}
+	return raw, nil
+}
+
+// Summarise renders a response body for a log without dumping all of it.
+//
+// Bounded, because a playlist body is hundreds of KB and a log is not a place
+// to put one.
+func Summarise(body []byte, limit int) string {
+	s := strings.TrimSpace(string(body))
+	if len(s) > limit {
+		return s[:limit] + "…"
+	}
+	return s
+}
+
 // postJSON issues an authenticated POST with a JSON body.
 func (c *Client) postJSON(ctx context.Context, app App, tok Token, url string, in, out any) error {
 	body, err := json.Marshal(in)
