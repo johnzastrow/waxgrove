@@ -9,6 +9,7 @@ import { api, ApiError } from '../api/client'
 import { useSession } from '../state/session'
 import { ErrorNote, Field, Spinner } from '../components/bits'
 import { Ring } from '../components/Ring'
+import { Build } from '../components/Build'
 
 type Mode = 'login' | 'register'
 
@@ -129,6 +130,8 @@ export function Login() {
       <p className="small muted gate-foot">
         Waxgrove stores metadata about songs — never audio. What you listen to
         stays with your streaming service.
+        <br />
+        <Build />
       </p>
     </div>
   )

@@ -665,3 +665,34 @@ func TestInstanceReportsWhetherAnInviteIsNeeded(t *testing.T) {
 		t.Errorf("second registration with no code = %d, want 403", got.Code)
 	}
 }
+
+// ----------------------------------------------------------------- version --
+
+// Readable without signing in, because "which build is this" is the first
+// question during a bad deploy — exactly when nobody can sign in.
+func TestVersionIsPublicAndIdentifiesTheBuild(t *testing.T) {
+	c := newAPI(t)
+	rec := c.do("GET", "/api/version", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("version = %d, want 200 without authenticating", rec.Code)
+	}
+	body := c.mustJSON(rec)
+
+	v, _ := body["version"].(string)
+	if v == "" {
+		t.Fatal("no version reported")
+	}
+	// A semantic version, not a bare commit: it is what a person cites.
+	if strings.Count(v, ".") != 2 {
+		t.Errorf("version = %q, want semver", v)
+	}
+	if full, _ := body["full"].(string); !strings.Contains(full, v) {
+		t.Errorf("full = %q does not contain the version", full)
+	}
+	// Nothing about the instance's contents leaks from an unauthenticated route.
+	for _, forbidden := range []string{"email", "secret", "token", "path"} {
+		if strings.Contains(strings.ToLower(rec.Body.String()), forbidden) {
+			t.Errorf("the version response mentions %q: %s", forbidden, rec.Body)
+		}
+	}
+}

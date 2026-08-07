@@ -2,7 +2,12 @@
 BINARY  := waxgrove
 PKG     := ./cmd/waxgrove
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/johnzastrow/waxgrove/internal/httpapi.Version=$(VERSION)
+BUILT   ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# The semantic version lives in internal/version; the build stamps only what
+# identifies this artifact.
+LDFLAGS := -s -w \
+  -X github.com/johnzastrow/waxgrove/internal/version.Commit=$(VERSION) \
+  -X github.com/johnzastrow/waxgrove/internal/version.BuiltAt=$(BUILT)
 
 # CGO off keeps the pure-Go sqlite driver and a static binary (§7).
 export CGO_ENABLED := 0

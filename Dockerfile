@@ -29,11 +29,14 @@ COPY . .
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
 
 ARG VERSION=dev
+ARG BUILT=unknown
 # CGO off: the pure-Go sqlite driver, and a genuinely static binary that can run
 # on a base image with no libc at all.
 ENV CGO_ENABLED=0
 RUN go build -trimpath \
-      -ldflags "-s -w -X github.com/johnzastrow/waxgrove/internal/httpapi.Version=${VERSION}" \
+      -ldflags "-s -w \
+        -X github.com/johnzastrow/waxgrove/internal/version.Commit=${VERSION} \
+        -X github.com/johnzastrow/waxgrove/internal/version.BuiltAt=${BUILT}" \
       -o /out/waxgrove ./cmd/waxgrove
 
 # Fail the build rather than ship an image that starts and serves nothing.

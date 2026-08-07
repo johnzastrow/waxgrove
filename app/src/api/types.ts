@@ -5,6 +5,15 @@
 // small and explicit on the Go side, and a generator would be more machinery
 // than it saves. When a view function changes, change the matching type here.
 
+/** Which build this is. Readable without signing in. */
+export interface VersionInfo {
+  version: string
+  commit?: string
+  built_at?: string
+  /** Ready to display: "0.4.0 (aa966b5)". */
+  full: string
+}
+
 /** The sign-in surface's state, readable before authenticating. */
 export interface InstanceInfo {
   /** False only on an instance nobody has claimed yet. */

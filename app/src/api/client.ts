@@ -5,7 +5,7 @@ import type {
   AddTracksResponse, Annotations, Candidate, CommitResponse, ConnectStatus,
   CrateItem, CrateResponse, HistoryResponse, ImportResponse, InviteResponse, Job,
   JobsResponse, Playlist, PlaylistsResponse, RecordsResponse, RemoteResponse,
-  InstanceInfo, SharedResponse, SyncsResponse, User,
+  InstanceInfo, SharedResponse, SyncsResponse, User, VersionInfo,
 } from './types'
 
 /**
@@ -83,6 +83,10 @@ export const api = {
    */
   instance: (signal?: AbortSignal) =>
     request<InstanceInfo>('/api/instance', signal ? { signal } : {}),
+
+  /** Which build is running. Public, so it can be read during a bad deploy. */
+  version: (signal?: AbortSignal) =>
+    request<VersionInfo>('/api/version', signal ? { signal } : {}),
 
   login: (email: string, password: string) =>
     request<User>('/api/login', { method: 'POST', body: { email, password } }),

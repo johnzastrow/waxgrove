@@ -18,6 +18,7 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/jspf"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
+	"github.com/johnzastrow/waxgrove/internal/version"
 )
 
 // API holds the dependencies the handlers need.
@@ -55,6 +56,7 @@ const sessionCookie = "waxgrove_session"
 func (a *API) Mount(mux *http.ServeMux) {
 	// Public
 	mux.HandleFunc("GET /api/instance", a.instance)
+	mux.HandleFunc("GET /api/version", a.versionInfo)
 	mux.HandleFunc("POST /api/register", a.register)
 	mux.HandleFunc("POST /api/login", a.login)
 
@@ -155,6 +157,15 @@ func (a *API) instance(w http.ResponseWriter, r *http.Request) {
 		"invite_required": claimed,
 		"first_account":   !claimed,
 	})
+}
+
+// versionInfo reports which build this is.
+//
+// Public, and readable before signing in: "which version am I looking at" is
+// the first question when something behaves unexpectedly, and needing an
+// account to answer it makes it useless during a failed deploy.
+func (a *API) versionInfo(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, version.Current())
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {

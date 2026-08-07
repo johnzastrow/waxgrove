@@ -244,6 +244,12 @@ you still have your playlists in a file that other things can read.
 or "Add to Home Screen" gives you an icon and a full-screen app. Same thing,
 better shape on a phone.
 
+**Check which version you are running** at the bottom of **You**, or on the
+sign-in screen itself — that one matters, because during a bad deploy the
+sign-in screen may be the only page anyone can reach. `GET /api/version` gives
+the same thing without an account. What changed in each version is in
+[`CHANGELOG.md`](../CHANGELOG.md).
+
 **Waxgrove sends no email.** No sign-up confirmation, no notifications, no
 password reset. It has no mail server and asks for no SMTP credentials, which is
 one less secret to hold and one less thing to configure — but it does mean

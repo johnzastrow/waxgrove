@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/johnzastrow/waxgrove/internal/version"
 )
 
 // Pinger is the subset of the store the health check needs.
@@ -54,8 +56,11 @@ type healthResponse struct {
 	Version string `json:"version"`
 }
 
-// Version is stamped at build time via -ldflags.
-var Version = "dev"
+// Version is the running build, for the health response.
+//
+// Kept as a package variable because the Makefile has always stamped it here;
+// it now defaults to the real version rather than "dev".
+var Version = version.Full()
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

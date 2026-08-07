@@ -6,6 +6,7 @@ import type { ConnectStatus } from '../api/types'
 import { useSession } from '../state/session'
 import { ErrorNote, Field, Loading } from '../components/bits'
 import { Connect } from '../components/Connect'
+import { Build } from '../components/Build'
 import { navigate, useToast } from '../router'
 
 export function Settings() {
@@ -148,6 +149,15 @@ export function Settings() {
             Delete my account
           </button>
         </div>
+      </section>
+
+      <section className="card">
+        <p className="eyebrow">This build</p>
+        <Build detailed />
+        <p className="small muted">
+          Quote the build when reporting something odd — the version alone does
+          not identify one artifact.
+        </p>
       </section>
 
       <section className="card">

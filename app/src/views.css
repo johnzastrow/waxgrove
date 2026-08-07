@@ -323,3 +323,7 @@ textarea {
   background: rgba(61,86,56,.12); color: var(--cream-200);
 }
 .first-account strong { color: var(--cream-100); }
+
+/* The running build. Quiet, but present on the sign-in screen too — during a
+   bad deploy that is the only screen anyone can reach. */
+.build { display: inline-block; margin-top: .5rem; font-size: .62rem; opacity: .55; }

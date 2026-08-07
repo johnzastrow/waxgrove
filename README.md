@@ -186,6 +186,7 @@ papering over it. Anti-corporate without being shouty. Plain language, no hype.
 
 | Document | Contents |
 |---|---|
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each version, newest first |
 | [`docs/GettingStarted.md`](docs/GettingStarted.md) | **Start here after installing** — the first account, the crate, playlists, annotations, connecting Spotify, your data |
 | [`docs/apple-music-membership.md`](docs/apple-music-membership.md) | The Apple Developer Program membership: what it costs, what works free without it, what it unlocks, the terms, and how to decide |
 | [`docs/requirements.md`](docs/requirements.md) | Requirements, architecture, streaming-API feasibility findings, security profile, resolved decisions (D1–D10) |
