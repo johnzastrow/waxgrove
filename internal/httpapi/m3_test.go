@@ -624,3 +624,44 @@ func TestChangePasswordEndsEveryOtherSession(t *testing.T) {
 		t.Errorf("the other device is still signed in: %d", rec.Code)
 	}
 }
+
+// ------------------------------------------------------- first account UX --
+
+// The registration form cannot otherwise know whether to ask for an invite
+// code, and a form that demands one on an unclaimed instance locks the operator
+// out of the thing they just installed. That shipped once; this stops it again.
+func TestInstanceReportsWhetherAnInviteIsNeeded(t *testing.T) {
+	c := newAPI(t)
+
+	// Unclaimed: no code needed, and the endpoint is readable without auth.
+	rec := c.do("GET", "/api/instance", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("instance = %d, want 200 without signing in", rec.Code)
+	}
+	before := c.mustJSON(rec)
+	if before["invite_required"] != false || before["first_account"] != true {
+		t.Fatalf("unclaimed instance reports %v, want no invite required", before)
+	}
+
+	// The first account really does register with an empty code.
+	if got := c.do("POST", "/api/register", map[string]any{
+		"email": "ana@example.test", "display_name": "Ana",
+		"password": goodPassword, "invite_code": "",
+	}); got.Code != http.StatusOK {
+		t.Fatalf("first registration with no code = %d: %s", got.Code, got.Body)
+	}
+
+	// Claimed: a code is now required, and the form is told so.
+	after := c.mustJSON(c.do("GET", "/api/instance", nil))
+	if after["invite_required"] != true || after["first_account"] != false {
+		t.Errorf("claimed instance reports %v, want an invite required", after)
+	}
+
+	// And the server enforces it, not just the form.
+	if got := c.do("POST", "/api/register", map[string]any{
+		"email": "ben@example.test", "display_name": "Ben",
+		"password": goodPassword, "invite_code": "",
+	}); got.Code != http.StatusForbidden {
+		t.Errorf("second registration with no code = %d, want 403", got.Code)
+	}
+}

@@ -314,3 +314,12 @@ textarea {
 
 .shelf-row { display: flex; align-items: center; gap: .5rem; }
 .shelf-row .shelf-item { flex: 1; min-width: 0; }
+
+/* The first account needs no invite code, and the form should say so rather
+   than presenting an empty required field the operator cannot satisfy. */
+.first-account {
+  margin-top: .9rem; padding: .7rem .8rem;
+  border: 1px dashed var(--grove-500); border-radius: 3px;
+  background: rgba(61,86,56,.12); color: var(--cream-200);
+}
+.first-account strong { color: var(--cream-100); }

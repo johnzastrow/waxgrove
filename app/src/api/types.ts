@@ -5,6 +5,13 @@
 // small and explicit on the Go side, and a generator would be more machinery
 // than it saves. When a view function changes, change the matching type here.
 
+/** The sign-in surface's state, readable before authenticating. */
+export interface InstanceInfo {
+  /** False only on an instance nobody has claimed yet. */
+  invite_required: boolean
+  first_account: boolean
+}
+
 export type Role = 'member' | 'admin'
 
 export interface User {

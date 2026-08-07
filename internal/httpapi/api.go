@@ -54,6 +54,7 @@ const sessionCookie = "waxgrove_session"
 // Mount registers the API routes onto a mux.
 func (a *API) Mount(mux *http.ServeMux) {
 	// Public
+	mux.HandleFunc("GET /api/instance", a.instance)
 	mux.HandleFunc("POST /api/register", a.register)
 	mux.HandleFunc("POST /api/login", a.login)
 
@@ -134,6 +135,26 @@ type registerReq struct {
 	DisplayName string `json:"display_name"`
 	Password    string `json:"password"`
 	InviteCode  string `json:"invite_code"`
+}
+
+// instance describes the sign-in surface before anyone has authenticated.
+//
+// It exists for one reason: the registration form cannot otherwise know whether
+// to ask for an invite code. The very first account does not need one, and a
+// form that demands one anyway locks the operator out of their own instance —
+// which is exactly what shipped before this.
+func (a *API) instance(w http.ResponseWriter, r *http.Request) {
+	claimed, err := a.Store.Users().HasAnyUser(r.Context())
+	if err != nil {
+		internal(w, "instance state", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		// An unclaimed instance takes its first account with no code. After
+		// that, invite-only (§6).
+		"invite_required": claimed,
+		"first_account":   !claimed,
+	})
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {

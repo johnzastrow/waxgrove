@@ -5,7 +5,7 @@ import type {
   AddTracksResponse, Annotations, Candidate, CommitResponse, ConnectStatus,
   CrateItem, CrateResponse, HistoryResponse, ImportResponse, InviteResponse, Job,
   JobsResponse, Playlist, PlaylistsResponse, RecordsResponse, RemoteResponse,
-  SharedResponse, SyncsResponse, User,
+  InstanceInfo, SharedResponse, SyncsResponse, User,
 } from './types'
 
 /**
@@ -77,6 +77,13 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
 
 export const api = {
   // --- auth ------------------------------------------------------------------
+  /**
+   * What the sign-in surface needs to know before anyone has authenticated —
+   * chiefly whether an invite code is required at all.
+   */
+  instance: (signal?: AbortSignal) =>
+    request<InstanceInfo>('/api/instance', signal ? { signal } : {}),
+
   login: (email: string, password: string) =>
     request<User>('/api/login', { method: 'POST', body: { email, password } }),
 

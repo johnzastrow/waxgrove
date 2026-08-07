@@ -22,12 +22,15 @@ Never audio. Your listening stays with your streaming service.
 
 Open your instance in a browser. You will land on the sign-in screen.
 
-1. Press **Register** (under the Sign in button).
-2. **Leave the invite code box empty.** The first account does not need one —
-   there is nobody yet to issue it.
+1. Press **Create the admin account** (under the Sign in button).
+2. The form tells you it is the first account and **does not ask for an invite
+   code** — there is nobody yet to issue one.
 3. Fill in your email, a display name, and a password of **at least 12
    characters**.
 4. Press **Create account**.
+
+If the form *does* ask you for an invite code, somebody has already registered
+on this instance. Ask them for one.
 
 You are now signed in, and you are the **admin**. You can confirm it under
 **You** — your role is shown there.

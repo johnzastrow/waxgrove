@@ -210,6 +210,18 @@ func (r *UserRepo) ChangePassword(ctx context.Context, userID, current, next str
 // ErrNoPassword means the account signs in another way and has none to change.
 var ErrNoPassword = errors.New("sqlite: this account has no password set")
 
+// HasAnyUser reports whether the instance has been claimed yet.
+//
+// Only ever used to tell the registration form whether to ask for an invite
+// code. It leaks nothing: that the first account has been taken is visible from
+// the outside anyway, since registering without a code stops working.
+func (r *UserRepo) HasAnyUser(ctx context.Context) (bool, error) {
+	var n int
+	err := r.s.Reader().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE deleted_at IS NULL`).Scan(&n)
+	return n > 0, err
+}
+
 // Get loads a user by ID.
 func (r *UserRepo) Get(ctx context.Context, id string) (*domain.User, error) {
 	var u domain.User

@@ -4,7 +4,7 @@
 // service), so the register form asks for a code up front rather than letting
 // someone fill in four fields and then be told no.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useSession } from '../state/session'
 import { ErrorNote, Field, Spinner } from '../components/bits'
@@ -21,6 +21,22 @@ export function Login() {
   const [invite, setInvite] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // Whether an invite code is needed at all. The very first account on an
+  // instance does not need one — asking for it anyway locks the operator out
+  // of the instance they just installed, which is what this fixes.
+  const [inviteRequired, setInviteRequired] = useState<boolean | null>(null)
+  useEffect(() => {
+    const ac = new AbortController()
+    api.instance(ac.signal)
+      .then((i) => setInviteRequired(i.invite_required))
+      // If we cannot tell, ask for it: the server is the real gate, and a
+      // spurious field beats silently dropping a code somebody needs to give.
+      .catch(() => setInviteRequired(true))
+    return () => ac.abort()
+  }, [])
+
+  const firstAccount = inviteRequired === false
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,7 +67,15 @@ export function Login() {
       <form className="card" onSubmit={submit}>
         <p className="eyebrow">{mode === 'login' ? 'Sign in' : 'Join this grove'}</p>
 
-        {mode === 'register' && (
+        {mode === 'register' && firstAccount && (
+          <p className="small first-account">
+            <strong>This is the first account on this instance.</strong> It
+            becomes the admin, and needs no invite code. Everyone after you
+            will.
+          </p>
+        )}
+
+        {mode === 'register' && !firstAccount && (
           <Field
             label="Invite code" value={invite} required
             autoComplete="off" spellCheck={false}
@@ -90,12 +114,14 @@ export function Login() {
         </div>
 
         <p className="small muted switch">
-          {mode === 'login' ? 'Got an invite code? ' : 'Already a member? '}
+          {mode === 'login'
+            ? (firstAccount ? 'Nobody has claimed this instance yet. ' : 'Got an invite code? ')
+            : 'Already a member? '}
           <button
             type="button" className="linkish"
             onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null) }}
           >
-            {mode === 'login' ? 'Register' : 'Sign in'}
+            {mode === 'login' ? (firstAccount ? 'Create the admin account' : 'Register') : 'Sign in'}
           </button>
         </p>
       </form>
