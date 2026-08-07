@@ -125,6 +125,10 @@ func TestAuthorizeURLCarriesPKCEAndMinimalScopes(t *testing.T) {
 	if q.Get("state") == "" {
 		t.Error("no state parameter: the callback would be forgeable")
 	}
+	// The market is needed for regional resolution, so this one is deliberate.
+	if !strings.Contains(q.Get("scope"), "user-read-private") {
+		t.Error("not asking for user-read-private; the user's market would be unknown")
+	}
 	for _, unwanted := range []string{"user-read-email", "user-library-modify", "streaming"} {
 		if strings.Contains(q.Get("scope"), unwanted) {
 			t.Errorf("asking for %q, which no feature needs", unwanted)
@@ -477,6 +481,48 @@ func TestMissingPlaylistIsDistinguishable(t *testing.T) {
 	var st *ErrStatus
 	if !errors.As(err, &st) || !st.NotFound() {
 		t.Fatalf("got %v, want a recognisable 404", err)
+	}
+	// The request has to survive into the error, or a failure in production is
+	// undiagnosable: "Forbidden" alone says nothing about which call it was.
+	if st.URL == "" || st.Method == "" {
+		t.Errorf("error does not carry the request: %+v", st)
+	}
+	if strings.Contains(err.Error(), "?") && !strings.Contains(err.Error(), "[query]") {
+		t.Errorf("query values reached the error text: %v", err)
+	}
+}
+
+// A 403 has to say enough to act on. Spotify's reason field distinguishes
+// "you are not registered on this app" from "that playlist is off limits",
+// and both are things the user fixes differently.
+func TestForbiddenCarriesTheReason(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"status":403,"message":"Forbidden","reason":"PREMIUM_REQUIRED"}}`))
+	})
+	_, err := c.GetPlaylist(context.Background(), testApp, testTok, "pl")
+	var st *ErrStatus
+	if !errors.As(err, &st) {
+		t.Fatalf("got %v", err)
+	}
+	if st.Reason != "PREMIUM_REQUIRED" {
+		t.Errorf("reason = %q, want it preserved", st.Reason)
+	}
+	if !strings.Contains(err.Error(), "PREMIUM_REQUIRED") {
+		t.Errorf("the reason is not in the message: %v", err)
+	}
+}
+
+// An unparseable body is the only evidence there is; a generic string throws
+// away the one thing that could explain the failure.
+func TestUnparseableErrorBodyIsPreserved(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>upstream exploded</html>"))
+	})
+	_, err := c.GetPlaylist(context.Background(), testApp, testTok, "pl")
+	if !strings.Contains(err.Error(), "upstream exploded") {
+		t.Errorf("the body was discarded: %v", err)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,13 +93,26 @@ func (e *ErrRateLimited) Error() string {
 }
 
 // ErrStatus is any other non-success response.
+//
+// It carries the request that failed. Without that, a 403 in a log is
+// undiagnosable — "Forbidden" alone does not say whether the user is
+// unregistered, the playlist is off-limits, or a scope is missing.
 type ErrStatus struct {
 	Code    int
 	Message string
+	Method  string
+	URL     string
+	// Reason is Spotify's machine-readable hint where it gives one, which is
+	// often more specific than the message.
+	Reason string
 }
 
 func (e *ErrStatus) Error() string {
-	return fmt.Sprintf("spotify: request failed (%d): %s", e.Code, e.Message)
+	s := fmt.Sprintf("spotify: %s %s failed (%d): %s", e.Method, e.URL, e.Code, e.Message)
+	if e.Reason != "" {
+		s += " [" + e.Reason + "]"
+	}
+	return s
 }
 
 // NotFound reports whether the resource is simply not there — a deleted
@@ -140,7 +154,11 @@ func (c *Client) doJSON(ctx context.Context, req *http.Request, quota string, ou
 				return nil
 			}
 		}
-		return &ErrStatus{Code: resp.StatusCode, Message: spotifyMessage(body)}
+		msg, reason := spotifyMessage(body)
+		return &ErrStatus{
+			Code: resp.StatusCode, Message: msg, Reason: reason,
+			Method: req.Method, URL: redactURL(req.URL.String()),
+		}
 	}
 
 	if out == nil || len(body) == 0 {
@@ -163,18 +181,44 @@ func retryAfter(resp *http.Response) time.Duration {
 	return 5 * time.Second
 }
 
-// spotifyMessage extracts the human-readable half of an error body without
-// echoing the whole thing, which can carry request context we should not log.
-func spotifyMessage(body []byte) string {
-	var e struct {
+// spotifyMessage extracts what Spotify said. Both shapes: the Web API's
+// {"error":{"message":...}} and the auth endpoints' {"error":..., "error_description":...}.
+func spotifyMessage(body []byte) (message, reason string) {
+	var api struct {
 		Error struct {
 			Message string `json:"message"`
+			Reason  string `json:"reason"`
 		} `json:"error"`
 	}
-	if json.Unmarshal(body, &e) == nil && e.Error.Message != "" {
-		return e.Error.Message
+	if json.Unmarshal(body, &api) == nil && api.Error.Message != "" {
+		return api.Error.Message, api.Error.Reason
 	}
-	return http.StatusText(http.StatusInternalServerError)
+	var oauth struct {
+		Error string `json:"error"`
+		Desc  string `json:"error_description"`
+	}
+	if json.Unmarshal(body, &oauth) == nil && oauth.Error != "" {
+		return oauth.Error, oauth.Desc
+	}
+	// Nothing parseable. Return a bounded slice of the raw body rather than a
+	// generic string, because at this point the raw body is the only evidence.
+	raw := strings.TrimSpace(string(body))
+	if len(raw) > 200 {
+		raw = raw[:200] + "…"
+	}
+	if raw == "" {
+		raw = http.StatusText(http.StatusInternalServerError)
+	}
+	return raw, ""
+}
+
+// redactURL strips query values before a URL reaches a log. Search terms are
+// what a user typed, and a token could in principle ride in a query.
+func redactURL(u string) string {
+	if i := strings.IndexByte(u, '?'); i >= 0 {
+		return u[:i] + "?[query]"
+	}
+	return u
 }
 
 // get issues an authenticated GET.

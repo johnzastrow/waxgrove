@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -402,8 +404,26 @@ func describe(err error) error {
 		return fmt.Errorf("%w: Spotify needs you to reconnect", ErrNotConnected)
 	}
 	var st *spotify.ErrStatus
-	if errors.As(err, &st) && st.NotFound() {
-		return errors.New("that playlist is not there, or your account cannot see it")
+	if errors.As(err, &st) {
+		// The full error, with the request in it, goes to the log. The user
+		// gets something they can act on (§6).
+		slog.Warn("spotify refused a request", "err", st.Error())
+
+		if st.NotFound() {
+			return errors.New("that playlist is not there, or your account cannot see it")
+		}
+		if st.Code == http.StatusForbidden {
+			// A 403 on a Development Mode app is nearly always one of two
+			// things, and the user fixes them differently — so say both rather
+			// than "Forbidden", which is actionable by nobody.
+			return errors.New(
+				"Spotify refused this. Two things cause it: your Spotify account " +
+					"is not listed under User Management in your own app's settings " +
+					"in the Spotify developer dashboard, or the playlist belongs to " +
+					"Spotify itself (Discover Weekly, Release Radar, any editorial " +
+					"or algorithmic playlist), which apps in Development Mode cannot " +
+					"read. Try one of your own playlists")
+		}
 	}
 	if d, ok := spotify.RateLimit(err); ok {
 		return fmt.Errorf("Spotify is rate limiting this account; it will retry in %s", d.Round(time.Second))

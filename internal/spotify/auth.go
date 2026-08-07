@@ -36,6 +36,11 @@ var Scopes = []string{
 	"playlist-read-private",   // read a private playlist the user links
 	"playlist-modify-public",  // export
 	"playlist-modify-private", // export
+	// The user's country, and nothing else we use. Availability is regional
+	// (§3.6), so without this every provider id is resolved with no market and
+	// may name a track that will not play for them. Left out originally, which
+	// is why the first connections recorded an empty storefront.
+	"user-read-private",
 }
 
 // ScopeString renders Scopes for an authorize URL.
