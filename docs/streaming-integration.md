@@ -304,8 +304,13 @@ the constraints above rather than from taste:
 
 1. Whether **Apple's API can modify an existing library playlist's tracks** — historically
    limited. Materially changes §8's re-sync mechanics if it cannot.
-2. Whether Spotify's **removal of playlist listing** from Development Mode is still in force. If
-   restored, the §4 import asymmetry disappears.
+2. ~~Whether Spotify's **removal of playlist listing** from Development Mode is still in force.~~
+   **Answered in production, 2026-08-07, and worse than assumed.** Development Mode also refuses
+   `GET /playlists/{id}/tracks` — 403, on a playlist the user owns, with `GET /playlists/{id}`
+   succeeding against the same token moments earlier. Waxgrove therefore reads the items *inline*
+   from the playlist object, which is still permitted. That caps a single import at one page of
+   100 tracks: paging needs the blocked endpoint, so a longer playlist reports how much was
+   readable rather than importing a silently shortened copy (F15).
 3. Current Spotify Development Mode **user cap** (5 at time of writing) and **search result cap**
    (10).
 4. Exact ISRC filter syntax on both services.

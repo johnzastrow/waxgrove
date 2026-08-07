@@ -539,3 +539,122 @@ func TestCallsAreAuthenticated(t *testing.T) {
 		t.Errorf("Authorization = %q", got)
 	}
 }
+
+// Spotify refuses GET /playlists/{id}/tracks for apps in Development Mode —
+// observed in production. The playlist endpoint still works and will return the
+// items inline, so that is where the tracks come from.
+func TestPlaylistWithTracksReadsItemsInline(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/tracks") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"status":403,"message":"Forbidden"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Accupuncture", "snapshot_id": "s1",
+			"owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{
+				"total": 2, "next": "",
+				"items": []any{
+					map[string]any{"track": map[string]any{
+						"id": "1", "name": "Pink Moon",
+						"artists":      []any{map[string]any{"name": "Nick Drake"}},
+						"external_ids": map[string]any{"isrc": "GBAYE0601498"},
+					}},
+					map[string]any{"track": nil},
+				},
+			},
+		})
+	})
+
+	meta, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	if err != nil {
+		t.Fatalf("PlaylistWithTracks: %v", err)
+	}
+	if meta.Name != "Accupuncture" || meta.SnapshotID != "s1" {
+		t.Errorf("metadata = %+v", meta)
+	}
+	if len(tracks) != 1 || tracks[0].ISRC != "GBAYE0601498" {
+		t.Fatalf("tracks = %+v, want the one real track", tracks)
+	}
+	// One request, and never the blocked endpoint.
+	if s.count() != 1 {
+		t.Errorf("made %d requests, want 1", s.count())
+	}
+	if strings.Contains(s.req(0).URL.Path, "/tracks") {
+		t.Error("used the endpoint Development Mode blocks")
+	}
+}
+
+// A playlist longer than one page needs the blocked endpoint. Importing the
+// first hundred and calling it done would be exactly the quiet data loss F15
+// exists to prevent, so the caller is told instead.
+func TestPlaylistWithTracksReportsATruncatedRead(t *testing.T) {
+	var serverURL string
+	stub, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/tracks") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"status":403,"message":"Forbidden"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Long one", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{
+				"total": 150, "next": serverURL + "/playlists/pl/tracks?offset=100",
+				"items": []any{map[string]any{"track": map[string]any{
+					"id": "1", "name": "One",
+					"artists": []any{map[string]any{"name": "A"}},
+				}}},
+			},
+		})
+	})
+
+	serverURL = stub.URL
+
+	_, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	var tr *ErrTruncated
+	if !errors.As(err, &tr) {
+		t.Fatalf("got %v, want ErrTruncated", err)
+	}
+	if tr.Total != 150 {
+		t.Errorf("reported total %d, want 150", tr.Total)
+	}
+	// What was readable is still returned, so the caller can say how much.
+	if len(tracks) != 1 {
+		t.Errorf("got %d tracks, want the page that was readable", len(tracks))
+	}
+}
+
+// When paging is allowed, it is still used, so a long playlist imports fully.
+func TestPlaylistWithTracksPagesWhenAllowed(t *testing.T) {
+	var serverURL string
+	stub, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/tracks") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"next": "",
+				"items": []any{map[string]any{"track": map[string]any{
+					"id": "2", "name": "Two", "artists": []any{map[string]any{"name": "B"}},
+				}}},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Long one", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{
+				"total": 2, "next": serverURL + "/playlists/pl/tracks?offset=1",
+				"items": []any{map[string]any{"track": map[string]any{
+					"id": "1", "name": "One", "artists": []any{map[string]any{"name": "A"}},
+				}}},
+			},
+		})
+	})
+	serverURL = stub.URL
+
+	_, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	if err != nil {
+		t.Fatalf("PlaylistWithTracks: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Errorf("got %d tracks, want both pages", len(tracks))
+	}
+}

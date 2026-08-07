@@ -199,20 +199,35 @@ func (s *Spotify) FetchPlaylist(ctx context.Context, userID, ref string) (string
 		return "", nil, err
 	}
 
-	meta, err := s.client.GetPlaylist(ctx, app, tok, id)
-	if err != nil {
-		return "", nil, describe(err)
-	}
-	tracks, err := s.client.PlaylistTracks(ctx, app, tok, id)
-	if err != nil {
-		return "", nil, describe(err)
-	}
+	// One call, with the tracks inline. Spotify refuses the separate tracks
+	// endpoint for apps in Development Mode, so asking the playlist endpoint
+	// for its items is the route that actually works.
+	meta, tracks, err := s.client.PlaylistWithTracks(ctx, app, tok, id)
+
 	name := meta.Name
 	if name == "" {
 		name = "Imported from Spotify"
 	}
+
+	// A partial read is reported, never silently accepted: importing the first
+	// hundred of two hundred tracks and calling it done is the quiet data loss
+	// F15 exists to prevent.
+	var truncated *spotify.ErrTruncated
+	if errors.As(err, &truncated) {
+		return name, tracks, fmt.Errorf(
+			"only the first %d of %d tracks could be read — Spotify does not let "+
+				"apps in Development Mode page through a playlist. Split it into "+
+				"playlists of 100 or fewer and import them separately: %w",
+			truncated.Got, truncated.Total, ErrPartialRead)
+	}
+	if err != nil {
+		return "", nil, describe(err)
+	}
 	return name, tracks, nil
 }
+
+// ErrPartialRead means only part of a playlist was readable.
+var ErrPartialRead = errors.New("connector: the playlist could not be read in full")
 
 // ------------------------------------------------------------------- export --
 

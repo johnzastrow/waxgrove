@@ -64,9 +64,20 @@ func newFakeSpotify(t *testing.T) *fakeSpotify {
 			_, _ = w.Write([]byte(`{"error":{"message":"Not found."}}`))
 			return
 		}
+		// Real Spotify returns the items inline when asked for them, which is
+		// how Waxgrove reads a playlist — the separate tracks endpoint is
+		// blocked for Development Mode apps.
+		f.mu.Lock()
+		items := make([]any, 0, len(f.tracks))
+		for _, tr := range f.tracks {
+			items = append(items, map[string]any{"track": tr})
+		}
+		total := len(f.tracks)
+		f.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": r.PathValue("id"), "name": "From Spotify",
 			"owner": map[string]any{"id": "spotify-user"}, "snapshot_id": snap,
+			"tracks": map[string]any{"total": total, "next": "", "items": items},
 		})
 	})
 	mux.HandleFunc("PUT /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {

@@ -36,6 +36,10 @@ type apiPlaylist struct {
 	} `json:"owner"`
 	Tracks struct {
 		Total int `json:"total"`
+		Items []struct {
+			Track *apiTrack `json:"track"`
+		} `json:"items"`
+		Next string `json:"next"`
 	} `json:"tracks"`
 }
 
@@ -122,17 +126,79 @@ func (c *Client) GetPlaylist(ctx context.Context, app App, tok Token, id string)
 	}, nil
 }
 
+// trackFields is the projection used everywhere tracks are read. Asking for
+// only what the catalogue stores keeps a 100-track page to a few hundred KB.
+const trackFields = "track(id,name,duration_ms,uri,is_local," +
+	"artists(name),album(name,release_date),external_ids(isrc))"
+
+// ErrTruncated means only part of a playlist could be read.
+//
+// Development Mode blocks the paging endpoint for some apps, so a playlist
+// longer than one page cannot be read in full. Reporting that is the only
+// honest option: silently importing the first hundred of two hundred tracks is
+// exactly the quiet data loss F15 exists to prevent.
+type ErrTruncated struct{ Got, Total int }
+
+func (e *ErrTruncated) Error() string {
+	return fmt.Sprintf("spotify: could only read %d of %d tracks", e.Got, e.Total)
+}
+
+// PlaylistWithTracks reads a playlist and its first page of tracks in one call.
+//
+// This exists because Spotify refuses GET /playlists/{id}/tracks for apps in
+// Development Mode — observed in production, February 2026 migration — while
+// GET /playlists/{id} keeps working and will return the tracks inline if asked.
+// So the tracks come from the endpoint that is actually allowed.
+//
+// One page is 100 tracks. Beyond that, paging needs the blocked endpoint; the
+// caller is told rather than handed a silently shortened playlist.
+func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id string) (Playlist, []domain.Candidate, error) {
+	var out apiPlaylist
+	u := fmt.Sprintf(
+		"%s/playlists/%s?fields=id,name,description,snapshot_id,owner(id),"+
+			"tracks(total,next,items(%s))",
+		c.apiURL, url.PathEscape(id), trackFields)
+	if err := c.get(ctx, app, tok, u, &out); err != nil {
+		return Playlist{}, nil, err
+	}
+
+	meta := Playlist{
+		ID: out.ID, Name: out.Name, Description: out.Description,
+		OwnerID: out.Owner.ID, Total: out.Tracks.Total, SnapshotID: out.SnapshotID,
+	}
+	tracks := make([]domain.Candidate, 0, len(out.Tracks.Items))
+	for _, item := range out.Tracks.Items {
+		if item.Track == nil || item.Track.IsLocal {
+			continue
+		}
+		tracks = append(tracks, candidateFrom(*item.Track))
+	}
+
+	// Everything fitted in the one call.
+	if out.Tracks.Next == "" {
+		return meta, tracks, nil
+	}
+
+	// More to fetch. Try the paging endpoint; if it is blocked, say how much
+	// was readable rather than pretending the playlist is this length.
+	rest, err := c.tracksFrom(ctx, app, tok, out.Tracks.Next)
+	if err != nil {
+		return meta, tracks, &ErrTruncated{Got: len(tracks), Total: out.Tracks.Total}
+	}
+	return meta, append(tracks, rest...), nil
+}
+
 // PlaylistTracks reads every track, following pagination.
 //
-// Each track carries an ISRC, so these land at step 1 of the resolution ladder
-// — exact and automatic (§3.2). That is why a provider import produces almost
-// entirely high-confidence records where a pasted text list does not.
+// Kept for callers that already have the metadata. Prefer PlaylistWithTracks:
+// it works on Development Mode apps, which this does not.
 func (c *Client) PlaylistTracks(ctx context.Context, app App, tok Token, id string) ([]domain.Candidate, error) {
-	u := fmt.Sprintf("%s/playlists/%s/tracks?limit=100"+
-		"&fields=next,items(track(id,name,duration_ms,uri,is_local,"+
-		"artists(name),album(name,release_date),external_ids(isrc)))",
-		c.apiURL, url.PathEscape(id))
+	u := fmt.Sprintf("%s/playlists/%s/tracks?limit=100&fields=next,items(%s)",
+		c.apiURL, url.PathEscape(id), trackFields)
+	return c.tracksFrom(ctx, app, tok, u)
+}
 
+func (c *Client) tracksFrom(ctx context.Context, app App, tok Token, u string) ([]domain.Candidate, error) {
 	var out []domain.Candidate
 	// A playlist is capped at 10,000 tracks, so 200 pages is well past any real
 	// input. The bound exists so a malformed `next` chain cannot loop forever.
