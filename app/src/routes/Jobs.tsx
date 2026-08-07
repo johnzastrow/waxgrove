@@ -162,6 +162,31 @@ const PROBLEM_LABEL: Record<string, string> = {
 
 function JobDetail({ job }: { job: Job }) {
   const problems = job.problems ?? []
+
+  // A job that failed before it processed anything has no per-track outcomes,
+  // and saying "everything made it across" there is the opposite of the truth.
+  // The error above already explains what happened; this pane should not
+  // contradict it.
+  if (job.state === 'failed' && job.total === 0 && problems.length === 0) {
+    return (
+      <div className="job-detail">
+        <p className="small muted">
+          This stopped before any track was looked at, so there is nothing
+          per-track to report — the reason is above.
+        </p>
+      </div>
+    )
+  }
+  if (job.state === 'cancelled' && problems.length === 0) {
+    return (
+      <div className="job-detail">
+        <p className="small muted">
+          Cancelled after {job.succeeded ?? 0} of {job.total}.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="job-detail">
       <p className="small muted">

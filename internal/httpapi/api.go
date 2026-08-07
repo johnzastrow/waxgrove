@@ -303,6 +303,13 @@ func (a *API) searchRemote(w http.ResponseWriter, r *http.Request, _ *domain.Use
 	}
 	cands, err := a.Remote.Search(r.Context(), q, intParam(r, "limit", 25))
 	if err != nil {
+		// The client abandoned this search — almost always because the user
+		// typed another character and the debounce aborted it. That is the
+		// normal case, not a fault, and logging it as one buries the real
+		// failures in noise.
+		if errors.Is(err, context.Canceled) || r.Context().Err() != nil {
+			return
+		}
 		// A metadata source being down must not read as a Waxgrove failure.
 		slog.Warn("remote search failed", "err", err)
 		problem(w, http.StatusBadGateway, "the metadata source is unavailable")
