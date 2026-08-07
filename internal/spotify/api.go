@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -416,19 +417,48 @@ func (c *Client) Me(ctx context.Context, app App, tok Token) (id, market string,
 }
 
 // CreatePlaylist makes a new playlist owned by the user.
+//
+// Two endpoints are tried. /me/playlists is the current form; the older
+// /users/{id}/playlists returned 403 in production on 2026-08-07 for an account
+// whose token carried both modify scopes, which is what an endpoint that has
+// moved looks like rather than a permissions problem.
+//
+// Whichever answers is used, so this works either way and does not need to be
+// changed again if Spotify moves it back.
 func (c *Client) CreatePlaylist(ctx context.Context, app App, tok Token,
 	userID, name, description string, public bool) (string, error) {
 
 	body := map[string]any{"name": name, "description": description, "public": public}
-	var out apiPlaylist
-	u := fmt.Sprintf("%s/users/%s/playlists", c.apiURL, url.PathEscape(userID))
-	if err := c.postJSON(ctx, app, tok, u, body, &out); err != nil {
-		return "", err
+
+	attempts := []string{
+		c.apiURL + "/me/playlists",
+		fmt.Sprintf("%s/users/%s/playlists", c.apiURL, url.PathEscape(userID)),
 	}
-	if out.ID == "" {
-		return "", errors.New("spotify: playlist was created but no id came back")
+
+	var firstErr error
+	for _, u := range attempts {
+		var out apiPlaylist
+		err := c.postJSON(ctx, app, tok, u, body, &out)
+		if err == nil {
+			if out.ID == "" {
+				return "", errors.New("spotify: playlist was created but no id came back")
+			}
+			slog.Info("created a spotify playlist", "endpoint", u)
+			return out.ID, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		// Only a missing or refused endpoint is worth retrying elsewhere. A
+		// rate limit or an expired token means stop.
+		var st *ErrStatus
+		if !errors.As(err, &st) || (st.Code != http.StatusNotFound && st.Code != http.StatusForbidden) {
+			return "", err
+		}
+		slog.Warn("spotify refused a playlist-creation endpoint; trying the other",
+			"endpoint", u, "status", st.Code)
 	}
-	return out.ID, nil
+	return "", firstErr
 }
 
 // AddTracksBatchSize is Spotify's documented per-request maximum.

@@ -430,16 +430,25 @@ func describe(err error) error {
 			return errors.New("that playlist is not there, or your account cannot see it")
 		}
 		if st.Code == http.StatusForbidden {
-			// A 403 on a Development Mode app is nearly always one of two
-			// things, and the user fixes them differently — so say both rather
-			// than "Forbidden", which is actionable by nobody.
+			// Reading and writing fail for different reasons, and telling
+			// somebody to check a playlist's ownership when the write was
+			// refused sends them nowhere useful.
+			if st.Method != "" && st.Method != http.MethodGet {
+				return errors.New(
+					"Spotify refused to write. Check that your Spotify account is " +
+						"listed under User Management in your own app's settings in " +
+						"the Spotify developer dashboard — an app in Development Mode " +
+						"can only act for accounts listed there. If it is listed, " +
+						"disconnect and reconnect Spotify here so the authorisation " +
+						"is reissued")
+			}
 			return errors.New(
-				"Spotify refused this. Two things cause it: your Spotify account " +
-					"is not listed under User Management in your own app's settings " +
-					"in the Spotify developer dashboard, or the playlist belongs to " +
-					"Spotify itself (Discover Weekly, Release Radar, any editorial " +
-					"or algorithmic playlist), which apps in Development Mode cannot " +
-					"read. Try one of your own playlists")
+				"Spotify refused to read this. Two things cause it: your Spotify " +
+					"account is not listed under User Management in your own app's " +
+					"settings in the Spotify developer dashboard, or the playlist " +
+					"belongs to Spotify itself (Discover Weekly, Release Radar, any " +
+					"editorial or algorithmic playlist), which apps in Development " +
+					"Mode cannot read. Try one of your own playlists")
 		}
 	}
 	if d, ok := spotify.RateLimit(err); ok {

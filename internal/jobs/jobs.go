@@ -333,6 +333,12 @@ func (r *Runner) runExport(ctx context.Context, job *domain.Job) error {
 			_ = r.store.Syncs().MarkDiverged(ctx, playlist.ID, sqlite.ServiceSpotify, market)
 			return err
 		}
+		if written.ProviderPlaylistID == "" {
+			// The playlist was never created, so reporting "added 0 of N"
+			// implies a playlist exists on Spotify that is sitting empty. None
+			// does, and saying so would send the user looking for it.
+			return err
+		}
 		return fmt.Errorf("added %d of %d tracks, then: %w", written.Added, len(uris), err)
 	}
 

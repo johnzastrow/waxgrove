@@ -793,3 +793,59 @@ func TestWritesUseTheItemsEndpoint(t *testing.T) {
 		t.Errorf("wrote to %q, want the items collection", got)
 	}
 }
+
+// Creating a playlist at /users/{id}/playlists returned 403 in production for
+// an account whose token carried both modify scopes — which is what a moved
+// endpoint looks like, not a permissions problem. Both are tried.
+func TestCreatePlaylistFallsBackBetweenEndpoints(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/me/playlists") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"status":403,"message":"Forbidden"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "made-it"})
+	})
+
+	id, err := c.CreatePlaylist(context.Background(), testApp, testTok, "me", "P", "", false)
+	if err != nil {
+		t.Fatalf("CreatePlaylist: %v", err)
+	}
+	if id != "made-it" {
+		t.Errorf("id = %q", id)
+	}
+	if s.count() != 2 {
+		t.Errorf("made %d requests, want it to try both endpoints", s.count())
+	}
+}
+
+// The current endpoint is tried first, and when it works the older one is not
+// touched at all.
+func TestCreatePlaylistPrefersTheCurrentEndpoint(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "made-it"})
+	})
+	if _, err := c.CreatePlaylist(context.Background(), testApp, testTok, "me", "P", "", false); err != nil {
+		t.Fatalf("CreatePlaylist: %v", err)
+	}
+	if s.count() != 1 {
+		t.Fatalf("made %d requests, want 1", s.count())
+	}
+	if got := s.req(0).URL.Path; got != "/me/playlists" {
+		t.Errorf("tried %q first, want /me/playlists", got)
+	}
+}
+
+// A rate limit or a dead token means stop, not try the other endpoint — the
+// second attempt would fail identically and spend quota doing it.
+func TestCreatePlaylistDoesNotRetryOnUnrelatedFailures(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	if _, err := c.CreatePlaylist(context.Background(), testApp, testTok, "me", "P", "", false); !IsAuthError(err) {
+		t.Fatalf("got %v, want an auth error", err)
+	}
+	if s.count() != 1 {
+		t.Errorf("made %d requests; an expired token is not worth retrying elsewhere", s.count())
+	}
+}
