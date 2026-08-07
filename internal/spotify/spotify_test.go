@@ -667,7 +667,7 @@ func TestPlaylistReadUsesNoFieldsProjection(t *testing.T) {
 	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": "pl", "name": "Accupuncture", "owner": map[string]any{"id": "me"},
-			"tracks": map[string]any{"total": 1, "next": "", "items": []any{
+			"items": map[string]any{"total": 1, "next": "", "items": []any{
 				map[string]any{"track": map[string]any{
 					"id": "1", "name": "One", "artists": []any{map[string]any{"name": "A"}},
 				}},
@@ -687,7 +687,7 @@ func TestPlaylistReportingTracksButReturningNoneIsAnError(t *testing.T) {
 	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": "pl", "name": "Odd", "owner": map[string]any{"id": "me"},
-			"tracks": map[string]any{"total": 42, "next": "", "items": []any{}},
+			"items": map[string]any{"total": 42, "next": "", "items": []any{}},
 		})
 	})
 	_, _, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
@@ -704,10 +704,92 @@ func TestGenuinelyEmptyPlaylistIsNotAnError(t *testing.T) {
 	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": "pl", "name": "Empty", "owner": map[string]any{"id": "me"},
-			"tracks": map[string]any{"total": 0, "next": "", "items": []any{}},
+			"items": map[string]any{"total": 0, "next": "", "items": []any{}},
 		})
 	})
 	if _, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl"); err != nil || len(tracks) != 0 {
 		t.Errorf("tracks=%v err=%v, want an empty read with no error", tracks, err)
+	}
+}
+
+// Spotify renamed a playlist's contents from `tracks` to `items`, and each
+// entry's payload from `track` to `item`. Observed in production: the old names
+// return an empty collection rather than an error, so this failed as "that
+// playlist is empty" on a playlist with twenty songs in it.
+func TestReadsTheCurrentItemsShape(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "# Accupuncture", "snapshot_id": "s1",
+			"owner": map[string]any{"id": "br8kwall"},
+			"items": map[string]any{
+				"total": 2, "next": "",
+				"items": []any{
+					map[string]any{"is_local": false, "item": map[string]any{
+						"type": "track", "episode": false, "track": true,
+						"id": "1", "name": "Pink Moon",
+						"artists":      []any{map[string]any{"name": "Nick Drake"}},
+						"external_ids": map[string]any{"isrc": "GBAYE0601498"},
+					}},
+					// A playlist can hold podcast episodes now. They carry no
+					// ISRC and are not songs.
+					map[string]any{"is_local": false, "item": map[string]any{
+						"type": "episode", "episode": true, "id": "e1", "name": "Some podcast",
+					}},
+				},
+			},
+		})
+	})
+
+	meta, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	if err != nil {
+		t.Fatalf("PlaylistWithTracks: %v", err)
+	}
+	if meta.Name != "# Accupuncture" || meta.Total != 2 {
+		t.Errorf("metadata = %+v", meta)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("got %d tracks, want 1 (the episode is not a song): %+v", len(tracks), tracks)
+	}
+	if tracks[0].ISRC != "GBAYE0601498" {
+		t.Errorf("ISRC = %q", tracks[0].ISRC)
+	}
+}
+
+// The previous shape must keep working, so this does not break if the rename
+// is rolled back or an instance is served the old form.
+func TestStillReadsThePreviousTracksShape(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Old shape", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{
+				"total": 1, "next": "",
+				"items": []any{map[string]any{"track": map[string]any{
+					"id": "1", "name": "Dreams",
+					"artists":      []any{map[string]any{"name": "Fleetwood Mac"}},
+					"external_ids": map[string]any{"isrc": "USWB10101368"},
+				}}},
+			},
+		})
+	})
+	_, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	if err != nil {
+		t.Fatalf("PlaylistWithTracks: %v", err)
+	}
+	if len(tracks) != 1 || tracks[0].ISRC != "USWB10101368" {
+		t.Fatalf("got %+v", tracks)
+	}
+}
+
+// Writes go to the same renamed collection.
+func TestWritesUseTheItemsEndpoint(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"snapshot_id":"s"}`))
+	})
+	if _, err := c.AddTracks(context.Background(), testApp, testTok, "pl",
+		[]string{"spotify:track:x"}); err != nil {
+		t.Fatalf("AddTracks: %v", err)
+	}
+	if got := s.req(0).URL.Path; !strings.HasSuffix(got, "/items") {
+		t.Errorf("wrote to %q, want the items collection", got)
 	}
 }

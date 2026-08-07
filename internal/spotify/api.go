@@ -27,6 +27,16 @@ type Playlist struct {
 	SnapshotID string
 }
 
+// apiPlaylist carries both spellings of the contents.
+//
+// Spotify renamed the collection from `tracks` to `items`, and each entry's
+// payload from `track` to `item` — presumably so a playlist can hold episodes
+// as well as songs, which is why entries now carry a type. Observed in
+// production on 2026-08-07: the old names return an empty collection rather
+// than an error, and the old paging endpoint answers 403.
+//
+// Both are read, newest first, so this keeps working whichever an instance
+// gets and does not break if the rename is rolled back.
 type apiPlaylist struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -35,26 +45,63 @@ type apiPlaylist struct {
 	Owner       struct {
 		ID string `json:"id"`
 	} `json:"owner"`
-	Tracks struct {
-		Total int `json:"total"`
-		Items []struct {
-			Track *apiTrack `json:"track"`
-		} `json:"items"`
-		Next string `json:"next"`
-	} `json:"tracks"`
+	Items  *apiItemPage `json:"items"`  // current
+	Tracks *apiItemPage `json:"tracks"` // previous
 }
 
-type apiTrackPage struct {
-	Items []struct {
-		// Deleted or region-blocked entries arrive with a null track. Skipping
-		// them is right; failing the whole import over one is not.
-		Track *apiTrack `json:"track"`
-	} `json:"items"`
-	Next string `json:"next"`
+// contents returns whichever collection the response actually carried.
+func (p apiPlaylist) contents() apiItemPage {
+	if p.Items != nil && (len(p.Items.Items) > 0 || p.Items.Total > 0) {
+		return *p.Items
+	}
+	if p.Tracks != nil {
+		return *p.Tracks
+	}
+	if p.Items != nil {
+		return *p.Items
+	}
+	return apiItemPage{}
+}
+
+type apiItemPage struct {
+	Total int        `json:"total"`
+	Next  string     `json:"next"`
+	Items []apiEntry `json:"items"`
+}
+
+// apiEntry is one position in a playlist.
+type apiEntry struct {
+	Item    *apiTrack `json:"item"`  // current
+	Track   *apiTrack `json:"track"` // previous
+	IsLocal bool      `json:"is_local"`
+}
+
+// payload returns the song, or nil for anything that is not one.
+//
+// A playlist can now hold podcast episodes. They carry no ISRC and are not
+// songs, so they are skipped rather than imported as records with nothing to
+// identify them.
+func (e apiEntry) payload() *apiTrack {
+	t := e.Item
+	if t == nil {
+		t = e.Track
+	}
+	if t == nil {
+		return nil
+	}
+	if t.Type != "" && t.Type != "track" {
+		return nil
+	}
+	if t.Episode {
+		return nil
+	}
+	return t
 }
 
 type apiTrack struct {
 	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Episode    bool   `json:"episode"`
 	Name       string `json:"name"`
 	DurationMS int    `json:"duration_ms"`
 	URI        string `json:"uri"`
@@ -115,15 +162,16 @@ func isAlphanumeric(s string) bool {
 // GetPlaylist reads a playlist's metadata.
 func (c *Client) GetPlaylist(ctx context.Context, app App, tok Token, id string) (Playlist, error) {
 	var out apiPlaylist
-	u := fmt.Sprintf(
-		"%s/playlists/%s?fields=id,name,description,snapshot_id,owner(id),tracks(total)",
-		c.apiURL, url.PathEscape(id))
+	// No fields projection: projecting the contents collection returned it
+	// empty in production, and the collection was renamed underneath us.
+	u := fmt.Sprintf("%s/playlists/%s", c.apiURL, url.PathEscape(id))
 	if err := c.get(ctx, app, tok, u, &out); err != nil {
 		return Playlist{}, err
 	}
+	page := out.contents()
 	return Playlist{
 		ID: out.ID, Name: out.Name, Description: out.Description,
-		OwnerID: out.Owner.ID, Total: out.Tracks.Total, SnapshotID: out.SnapshotID,
+		OwnerID: out.Owner.ID, Total: page.Total, SnapshotID: out.SnapshotID,
 	}, nil
 }
 
@@ -169,17 +217,12 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 		return Playlist{}, nil, err
 	}
 
+	page := out.contents()
 	meta := Playlist{
 		ID: out.ID, Name: out.Name, Description: out.Description,
-		OwnerID: out.Owner.ID, Total: out.Tracks.Total, SnapshotID: out.SnapshotID,
+		OwnerID: out.Owner.ID, Total: page.Total, SnapshotID: out.SnapshotID,
 	}
-	tracks := make([]domain.Candidate, 0, len(out.Tracks.Items))
-	for _, item := range out.Tracks.Items {
-		if item.Track == nil || item.Track.IsLocal {
-			continue
-		}
-		tracks = append(tracks, candidateFrom(*item.Track))
-	}
+	tracks := entriesToCandidates(page.Items)
 
 	// A playlist that yields no tracks is either genuinely empty or a response
 	// this code cannot read. Those need different answers from the user, and
@@ -187,27 +230,45 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 	// kept and logged here rather than reasoned about.
 	if len(tracks) == 0 {
 		slog.Warn("a spotify playlist read produced no tracks",
-			"playlist", id, "reported_total", out.Tracks.Total,
+			"playlist", id, "reported_total", page.Total,
 			"body", Summarise(raw, 1200))
-		if out.Tracks.Total > 0 {
+		if page.Total > 0 {
 			return meta, nil, fmt.Errorf(
 				"spotify: the playlist reports %d tracks but returned none readable",
-				out.Tracks.Total)
+				page.Total)
 		}
 	}
 
 	// Everything fitted in the one call.
-	if out.Tracks.Next == "" {
+	if page.Next == "" {
 		return meta, tracks, nil
 	}
 
-	// More to fetch. Try the paging endpoint; if it is blocked, say how much
-	// was readable rather than pretending the playlist is this length.
-	rest, err := c.tracksFrom(ctx, app, tok, out.Tracks.Next)
+	// More to fetch. The next URL comes from the response, so it names whichever
+	// endpoint this account's Spotify actually serves.
+	rest, err := c.tracksFrom(ctx, app, tok, page.Next)
 	if err != nil {
-		return meta, tracks, &ErrTruncated{Got: len(tracks), Total: out.Tracks.Total}
+		return meta, tracks, &ErrTruncated{Got: len(tracks), Total: page.Total}
 	}
 	return meta, append(tracks, rest...), nil
+}
+
+// entriesToCandidates converts a page, skipping what cannot become a record.
+func entriesToCandidates(entries []apiEntry) []domain.Candidate {
+	out := make([]domain.Candidate, 0, len(entries))
+	for _, e := range entries {
+		// Local files exist only on that user's machine, and a removed track
+		// arrives as null. One of either must not fail the whole import.
+		if e.IsLocal {
+			continue
+		}
+		t := e.payload()
+		if t == nil || t.IsLocal {
+			continue
+		}
+		out = append(out, candidateFrom(*t))
+	}
+	return out
 }
 
 // PlaylistTracks reads every track, following pagination.
@@ -215,8 +276,7 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 // Kept for callers that already have the metadata. Prefer PlaylistWithTracks:
 // it works on Development Mode apps, which this does not.
 func (c *Client) PlaylistTracks(ctx context.Context, app App, tok Token, id string) ([]domain.Candidate, error) {
-	u := fmt.Sprintf("%s/playlists/%s/tracks?limit=100&fields=next,items(%s)",
-		c.apiURL, url.PathEscape(id), trackFields)
+	u := fmt.Sprintf("%s/playlists/%s/items?limit=100", c.apiURL, url.PathEscape(id))
 	return c.tracksFrom(ctx, app, tok, u)
 }
 
@@ -225,18 +285,11 @@ func (c *Client) tracksFrom(ctx context.Context, app App, tok Token, u string) (
 	// A playlist is capped at 10,000 tracks, so 200 pages is well past any real
 	// input. The bound exists so a malformed `next` chain cannot loop forever.
 	for page := 0; u != "" && page < 200; page++ {
-		var p apiTrackPage
+		var p apiItemPage
 		if err := c.get(ctx, app, tok, u, &p); err != nil {
 			return nil, err
 		}
-		for _, item := range p.Items {
-			if item.Track == nil || item.Track.IsLocal {
-				// Local files exist only on that user's machine; there is
-				// nothing for the catalogue to point at.
-				continue
-			}
-			out = append(out, candidateFrom(*item.Track))
-		}
+		out = append(out, entriesToCandidates(p.Items)...)
 		u = p.Next
 	}
 	return out, nil
@@ -389,7 +442,7 @@ const AddTracksBatchSize = 100
 func (c *Client) ReplaceTracks(ctx context.Context, app App, tok Token,
 	playlistID string, uris []string) (snapshot string, err error) {
 
-	u := fmt.Sprintf("%s/playlists/%s/tracks", c.apiURL, url.PathEscape(playlistID))
+	u := fmt.Sprintf("%s/playlists/%s/items", c.apiURL, url.PathEscape(playlistID))
 
 	first := uris
 	if len(first) > AddTracksBatchSize {
@@ -422,7 +475,7 @@ func (c *Client) ReplaceTracks(ctx context.Context, app App, tok Token,
 func (c *Client) AddTracks(ctx context.Context, app App, tok Token,
 	playlistID string, uris []string) (int, error) {
 
-	u := fmt.Sprintf("%s/playlists/%s/tracks", c.apiURL, url.PathEscape(playlistID))
+	u := fmt.Sprintf("%s/playlists/%s/items", c.apiURL, url.PathEscape(playlistID))
 	added := 0
 	for start := 0; start < len(uris); start += AddTracksBatchSize {
 		end := min(start+AddTracksBatchSize, len(uris))

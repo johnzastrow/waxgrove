@@ -305,12 +305,29 @@ the constraints above rather than from taste:
 1. Whether **Apple's API can modify an existing library playlist's tracks** — historically
    limited. Materially changes §8's re-sync mechanics if it cannot.
 2. ~~Whether Spotify's **removal of playlist listing** from Development Mode is still in force.~~
-   **Answered in production, 2026-08-07, and worse than assumed.** Development Mode also refuses
-   `GET /playlists/{id}/tracks` — 403, on a playlist the user owns, with `GET /playlists/{id}`
-   succeeding against the same token moments earlier. Waxgrove therefore reads the items *inline*
-   from the playlist object, which is still permitted. That caps a single import at one page of
-   100 tracks: paging needs the blocked endpoint, so a longer playlist reports how much was
-   readable rather than importing a silently shortened copy (F15).
+   **Answered in production, 2026-08-07 — and it was not a Development Mode restriction at all.**
+
+   Spotify has **renamed a playlist's contents from `tracks` to `items`**, and each entry's
+   payload from `track` to `item`. Entries now carry a `type` and an `episode` flag, so a
+   playlist can hold podcast episodes as well as songs.
+
+   The rename explains three symptoms that each looked like something else:
+
+   - `GET /playlists/{id}/tracks` → **403**, because the collection is now at `/items`. This
+     reads exactly like a permissions failure and is not one.
+   - `tracks.total` → **0** on a twenty-song playlist, because the field is `items`.
+   - A `fields=...tracks(items(...))` projection → **empty**, for the same reason.
+
+   Waxgrove now reads `items` and falls back to `tracks`, takes each entry from `item` or
+   `track`, skips anything whose type is not a track, and writes to `/items`. The paging URL is
+   taken from the response rather than constructed, so it names whichever endpoint that account
+   is actually served.
+
+   **Method note worth keeping.** Three plausible diagnoses were wrong before the response body
+   was logged: the user not being allowlisted, the playlist being editorial, and a malformed
+   fields projection. Each was consistent with the symptom. None survived the evidence. The fix
+   that mattered was making the failure legible — carrying the request into the error, and
+   keeping the body when a response parses cleanly into nothing.
 3. Current Spotify Development Mode **user cap** (5 at time of writing) and **search result cap**
    (10).
 4. Exact ISRC filter syntax on both services.

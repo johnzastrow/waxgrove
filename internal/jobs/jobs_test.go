@@ -70,17 +70,17 @@ func newFakeSpotify(t *testing.T) *fakeSpotify {
 		f.mu.Lock()
 		items := make([]any, 0, len(f.tracks))
 		for _, tr := range f.tracks {
-			items = append(items, map[string]any{"track": tr})
+			items = append(items, map[string]any{"item": tr, "is_local": false})
 		}
 		total := len(f.tracks)
 		f.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": r.PathValue("id"), "name": "From Spotify",
 			"owner": map[string]any{"id": "spotify-user"}, "snapshot_id": snap,
-			"tracks": map[string]any{"total": total, "next": "", "items": items},
+			"items": map[string]any{"total": total, "next": "", "items": items},
 		})
 	})
-	mux.HandleFunc("PUT /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /playlists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			URIs []string `json:"uris"`
 		}
@@ -134,7 +134,7 @@ func newFakeSpotify(t *testing.T) *fakeSpotify {
 		f.snapshot = "snap1"
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "new-provider-playlist"})
 	})
-	mux.HandleFunc("POST /playlists/{id}/tracks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /playlists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			URIs []string `json:"uris"`
 		}
