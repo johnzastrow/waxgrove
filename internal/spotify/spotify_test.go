@@ -658,3 +658,56 @@ func TestPlaylistWithTracksPagesWhenAllowed(t *testing.T) {
 		t.Errorf("got %d tracks, want both pages", len(tracks))
 	}
 }
+
+// The tracks come from the full playlist object, with no fields projection —
+// projecting a nested collection returned an empty items array in production,
+// and a call that succeeds while quietly returning nothing is the worst shape
+// of failure.
+func TestPlaylistReadUsesNoFieldsProjection(t *testing.T) {
+	s, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Accupuncture", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{"total": 1, "next": "", "items": []any{
+				map[string]any{"track": map[string]any{
+					"id": "1", "name": "One", "artists": []any{map[string]any{"name": "A"}},
+				}},
+			}},
+		})
+	})
+	if _, _, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl"); err != nil {
+		t.Fatalf("PlaylistWithTracks: %v", err)
+	}
+	if q := s.req(0).URL.Query().Get("fields"); q != "" {
+		t.Errorf("sent fields=%q; the projection is what returned nothing", q)
+	}
+}
+
+// "That playlist is empty" would send the user to look at the wrong thing.
+func TestPlaylistReportingTracksButReturningNoneIsAnError(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Odd", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{"total": 42, "next": "", "items": []any{}},
+		})
+	})
+	_, _, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl")
+	if err == nil {
+		t.Fatal("a playlist reporting 42 tracks and returning none was accepted")
+	}
+	if !strings.Contains(err.Error(), "42") {
+		t.Errorf("error %v does not say how many were expected", err)
+	}
+}
+
+// A genuinely empty playlist is not an error.
+func TestGenuinelyEmptyPlaylistIsNotAnError(t *testing.T) {
+	_, c := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "pl", "name": "Empty", "owner": map[string]any{"id": "me"},
+			"tracks": map[string]any{"total": 0, "next": "", "items": []any{}},
+		})
+	})
+	if _, tracks, err := c.PlaylistWithTracks(context.Background(), testApp, testTok, "pl"); err != nil || len(tracks) != 0 {
+		t.Errorf("tracks=%v err=%v, want an empty read with no error", tracks, err)
+	}
+}

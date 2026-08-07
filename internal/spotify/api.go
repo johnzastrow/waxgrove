@@ -154,10 +154,15 @@ func (e *ErrTruncated) Error() string {
 // caller is told rather than handed a silently shortened playlist.
 func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id string) (Playlist, []domain.Candidate, error) {
 	var out apiPlaylist
-	u := fmt.Sprintf(
-		"%s/playlists/%s?fields=id,name,description,snapshot_id,owner(id),"+
-			"tracks(total,next,items(%s))",
-		c.apiURL, url.PathEscape(id), trackFields)
+	// Deliberately no `fields` projection.
+	//
+	// Asking for a nested projection of the tracks returned a playlist with an
+	// empty items array — the call succeeded and the tracks simply were not
+	// there. Rather than guess at which spelling of Spotify's fields grammar it
+	// wants for a nested collection, take the whole object and trim it here.
+	// It costs a few hundred KB on an import, which happens rarely, and it
+	// cannot silently return nothing.
+	u := fmt.Sprintf("%s/playlists/%s", c.apiURL, url.PathEscape(id))
 	if err := c.get(ctx, app, tok, u, &out); err != nil {
 		return Playlist{}, nil, err
 	}
@@ -172,6 +177,15 @@ func (c *Client) PlaylistWithTracks(ctx context.Context, app App, tok Token, id 
 			continue
 		}
 		tracks = append(tracks, candidateFrom(*item.Track))
+	}
+
+	// A playlist that reports tracks but yielded none means the response shape
+	// was not what this expects. Saying so beats "that playlist is empty",
+	// which sends the user looking at the wrong thing entirely.
+	if len(tracks) == 0 && out.Tracks.Total > 0 {
+		return meta, nil, fmt.Errorf(
+			"spotify: the playlist reports %d tracks but returned none readable",
+			out.Tracks.Total)
 	}
 
 	// Everything fitted in the one call.

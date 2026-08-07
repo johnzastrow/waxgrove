@@ -203,6 +203,8 @@ func (s *Spotify) FetchPlaylist(ctx context.Context, userID, ref string) (string
 	// endpoint for apps in Development Mode, so asking the playlist endpoint
 	// for its items is the route that actually works.
 	meta, tracks, err := s.client.PlaylistWithTracks(ctx, app, tok, id)
+	slog.Info("read a spotify playlist",
+		"id", id, "reported", meta.Total, "readable", len(tracks), "err", err)
 
 	name := meta.Name
 	if name == "" {
