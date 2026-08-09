@@ -158,6 +158,89 @@ label .lbl {
 }
 .ring { flex: 0 0 auto; }
 
+/* ------------------------------------------------------------ song tables -- */
+/* Every field under a name. A dotted run of "Nick Drake · Pink Moon · 1972 ·
+   2:08" makes the reader work out which is the album and which is the year,
+   and gets it wrong for a band named after a number.
+   
+   Phone: each row is a small stack, and each value carries its own label.
+   Desktop: a real table, with the labels lifted into column headings. */
+
+.rows.songs li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "ring title  act"
+    "ring artist act"
+    "ring album  act"
+    "ring meta   act";
+  align-items: center;
+  gap: .1rem .7rem;
+  padding: .7rem .1rem;
+}
+.songs .c-ring   { grid-area: ring; }
+.songs .c-title  { grid-area: title; min-width: 0; }
+.songs .c-artist { grid-area: artist; min-width: 0; }
+.songs .c-album  { grid-area: album; min-width: 0; }
+.songs .c-year   { grid-area: meta; min-width: 0; }
+.songs .c-len    { display: none; }          /* phone: length is the least useful */
+.songs .c-act    { grid-area: act; display: flex; gap: .4rem; align-items: center; }
+
+/* The header row is a desktop device; on a phone the labels ride on the cells.
+   Specific enough to beat `.rows.songs li` above, which would otherwise make it
+   a grid and stack the headings down the page as if they were a song. */
+.rows.songs li.song-head { display: none; }
+
+.songs .v {
+  display: block; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.songs .v.ti { font-size: .95rem; color: var(--cream-100); font-weight: 500; }
+.songs .c-artist .v, .songs .c-album .v { font-size: .82rem; color: var(--cream-300); }
+.songs .v.none { color: var(--cream-300); opacity: .4; }
+
+/* Each value says what it is. Without this the album and the year are two
+   anonymous strings under a title. */
+.songs [data-label]::before {
+  content: attr(data-label) " ";
+  font-family: var(--mono); font-size: .55rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--cream-300); opacity: .55;
+  margin-right: .35rem;
+}
+.songs .c-title::before { display: none; }   /* the title needs no label */
+.songs .c-artist, .songs .c-album, .songs .c-year {
+  display: flex; align-items: baseline; min-width: 0;
+}
+.songs .c-year .v { font-size: .78rem; }
+
+@media (min-width: 820px) {
+  .rows.songs li {
+    grid-template-columns:
+      auto minmax(9rem, 2.2fr) minmax(7rem, 1.6fr) minmax(7rem, 1.6fr) 4rem 4rem auto;
+    grid-template-areas: "ring title artist album year len act";
+    align-items: center;
+    gap: .9rem;
+  }
+  .songs .c-artist { grid-area: artist; }
+  .songs .c-album  { grid-area: album; }
+  .songs .c-year   { grid-area: year; }
+  .songs .c-len    { grid-area: len; display: block; }
+  .songs .c-act    { grid-area: act; }
+
+  /* Labels move out of the cells and become column headings. */
+  .songs [data-label]::before { display: none; }
+  .rows.songs li.song-head {
+    display: grid;
+    border-bottom: 1px solid var(--wax-600);
+    padding-bottom: .4rem; margin-bottom: .2rem;
+  }
+  .songs .song-head span {
+    font-family: var(--mono); font-size: .55rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--cream-300); opacity: .6;
+  }
+  .songs .c-year .v, .songs .c-len .v { font-size: .78rem; }
+}
+
 .badge {
   flex: 0 0 auto; align-self: center;
   font-family: var(--mono); font-size: .58rem; letter-spacing: .08em;

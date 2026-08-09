@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, connect, jobsApi } from '../api/client'
 import type { Playlist, Revision, Sync } from '../api/types'
-import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
+import { Empty, ErrorNote, Loading, SongList, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
 import { useSession } from '../state/session'
 import { Annotations } from '../components/Annotations'
@@ -323,7 +323,7 @@ export function PlaylistDetail({ id }: { id: string }) {
             Search the grove and stage a few songs, then add them here.
           </Empty>
         ) : (
-          <ul className="rows numbered">
+          <SongList numbered>
             {playlist.tracks.map((t, i) => (
               <SongRow
                 key={`${t.position}-${t.record.id}`}
@@ -360,7 +360,7 @@ export function PlaylistDetail({ id }: { id: string }) {
                 } : {})}
               />
             ))}
-          </ul>
+          </SongList>
         )
       )}
 

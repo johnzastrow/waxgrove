@@ -11,8 +11,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, candidateFromRecord, connect, crate, jobsApi } from '../api/client'
-import type { Candidate, SongRecord } from '../api/types'
-import { Empty, ErrorNote, Loading, SongRow } from '../components/bits'
+import type { Candidate, RemoteResponse, SongRecord } from '../api/types'
+import { Empty, ErrorNote, Loading, SongList, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
 
 /** Two candidates are the same staged item when they agree on identity. */
@@ -20,9 +20,15 @@ function key(c: Candidate): string {
   return c.mbid || c.isrc || `${c.title ?? ''}|${c.artist ?? ''}`.toLowerCase()
 }
 
+/** The named fields a search can be narrowed to, alongside the free-text box. */
+interface Fields { title: string; artist: string; album: string; year: string }
+const noFields: Fields = { title: '', artist: '', album: '', year: '' }
+
 export function Grove() {
   const toast = useToast()
   const [q, setQ] = useState('')
+  const [fields, setFields] = useState<Fields>(noFields)
+  const [advanced, setAdvanced] = useState(false)
   const [local, setLocal] = useState<SongRecord[]>([])
   const [remote, setRemote] = useState<Candidate[]>([])
   const [remoteNote, setRemoteNote] = useState<string | null>(null)
@@ -36,6 +42,28 @@ export function Grove() {
   const [spotifyReady, setSpotifyReady] = useState(false)
   const [link, setLink] = useState('')
   const [importing, setImporting] = useState(false)
+
+  // Browsing the catalogue, shown when nothing is being searched for. You
+  // cannot search for a song you have forgotten you added, so "what have we
+  // got" needs its own answer.
+  const [browse, setBrowse] = useState<SongRecord[]>([])
+  const [browseTotal, setBrowseTotal] = useState(0)
+  const [browseMine, setBrowseMine] = useState(false)
+  const [browseSort, setBrowseSort] = useState<'artist' | 'recent'>('artist')
+  const [browsing, setBrowsing] = useState(false)
+  const PAGE = 50
+
+  const loadBrowse = (offset = 0, mine = browseMine, sort = browseSort) => {
+    setBrowsing(true)
+    api.browseRecords({ mine, sort, limit: PAGE, offset })
+      .then((r) => {
+        setBrowse((prev) => offset === 0 ? (r.records ?? []) : [...prev, ...(r.records ?? [])])
+        setBrowseTotal(r.total ?? 0)
+      })
+      .catch(() => { /* the search box still works */ })
+      .finally(() => setBrowsing(false))
+  }
+  useEffect(() => { loadBrowse(0) }, [])
 
   useEffect(() => {
     crate.list()
@@ -77,9 +105,13 @@ export function Grove() {
   // Debounced search. The ref lets a newer keystroke abort an in-flight
   // request, so results can never arrive out of order.
   const inflight = useRef<AbortController | null>(null)
+  const fieldsKey = JSON.stringify(fields)
   useEffect(() => {
     const term = q.trim()
-    if (term.length < 2) {
+    const scoped = Object.values(fields).some((v) => v.trim())
+    // Free text needs two characters to be worth a query; a named field does
+    // not — "year 1972" is specific from the first keystroke.
+    if (term.length < 2 && !scoped) {
       setLocal([]); setRemote([]); setRemoteNote(null); setSearched(false)
       return
     }
@@ -91,9 +123,17 @@ export function Grove() {
 
       // Both halves run together; the remote failing must not blank the local
       // results, which are the more useful half anyway.
+      //
+      // The metadata source takes free text only, so a field-scoped search is
+      // flattened for it. It is a coarser question, which is honest: the
+      // remote half is a suggestion, the local half is the answer.
+      const remoteTerm = [term, fields.title, fields.artist, fields.album]
+        .filter(Boolean).join(' ').trim()
       Promise.allSettled([
-        api.searchRecords(term, ac.signal),
-        api.searchRemote(term, ac.signal),
+        api.searchRecords({ q: term, ...fields }, ac.signal),
+        remoteTerm.length >= 2
+          ? api.searchRemote(remoteTerm, ac.signal)
+          : Promise.resolve<RemoteResponse>({ candidates: [] }),
       ]).then(([l, r]) => {
         if (ac.signal.aborted) return
         if (l.status === 'fulfilled') setLocal(l.value.records ?? [])
@@ -111,7 +151,7 @@ export function Grove() {
       })
     }, 300)
     return () => clearTimeout(t)
-  }, [q])
+  }, [q, fieldsKey])
 
   const stageButton = (c: Candidate) => (
     <button
@@ -130,9 +170,49 @@ export function Grove() {
 
       <input
         type="search" value={q} onChange={(e) => setQ(e.target.value)}
-        placeholder="Title, artist, or ISRC" aria-label="Search for a song"
+        placeholder="Anything — title, artist, album, ISRC"
+        aria-label="Search for a song"
         autoComplete="off" className="search-input"
       />
+
+      <div className="search-more">
+        <button
+          type="button" className="linkish" aria-expanded={advanced}
+          onClick={() => setAdvanced((v) => !v)}
+        >
+          {advanced ? 'Hide fields' : 'Search particular fields'}
+        </button>
+        {(advanced || Object.values(fields).some((v) => v)) &&
+          Object.values(fields).some((v) => v) && (
+          <button type="button" className="linkish"
+                  onClick={() => { setFields(noFields); setAdvanced(false) }}>
+            Clear fields
+          </button>
+        )}
+      </div>
+
+      {advanced && (
+        <div className="search-fields">
+          {([
+            ['title', 'Title', 'text'],
+            ['artist', 'Artist', 'text'],
+            ['album', 'Album', 'text'],
+            ['year', 'Year', 'number'],
+          ] as const).map(([k, label, type]) => (
+            <label key={k}>
+              <span className="lbl">{label}</span>
+              <input
+                type={type} value={fields[k]} autoComplete="off"
+                onChange={(e) => setFields((f) => ({ ...f, [k]: e.target.value }))}
+              />
+            </label>
+          ))}
+          <p className="small muted">
+            These narrow the box above rather than replacing it. Leave any of
+            them blank to ignore it.
+          </p>
+        </div>
+      )}
 
       {crateCount > 0 && (
         <p className="small crate-note">
@@ -172,7 +252,7 @@ export function Grove() {
       {local.length > 0 && (
         <section className="card">
           <p className="eyebrow">In the grove · {local.length}</p>
-          <ul className="rows">
+          <SongList>
             {local.map((r) => (
               <SongRow
                 key={r.id} record={r} confidence={1}
@@ -180,7 +260,7 @@ export function Grove() {
                 action={stageButton(candidateFromRecord(r))}
               />
             ))}
-          </ul>
+          </SongList>
         </section>
       )}
 
@@ -195,7 +275,7 @@ export function Grove() {
       {remote.length > 0 && (
         <section className="card">
           <p className="eyebrow">Wider catalogue · {remote.length}</p>
-          <ul className="rows">
+          <SongList>
             {remote.map((c, i) => (
               <SongRow
                 key={key(c) + i} candidate={c}
@@ -203,7 +283,7 @@ export function Grove() {
                 action={stageButton(c)}
               />
             ))}
-          </ul>
+          </SongList>
         </section>
       )}
 
@@ -214,11 +294,71 @@ export function Grove() {
         </Empty>
       )}
 
+      {/* With nothing searched for, show the catalogue itself. A search box is
+          no help when you cannot remember what you are looking for. */}
       {!searched && !searching && (
-        <Empty title="Search the shared catalogue">
-          Everything anyone here has ever added is already searchable, instantly.
-          Anything else is looked up from the metadata source.
-        </Empty>
+        browseTotal === 0 && !browsing ? (
+          <Empty title="Nothing in the grove yet">
+            Search above to pull songs in from the wider catalogue, or paste a
+            list into <Link to="/crate">your crate</Link>.
+          </Empty>
+        ) : (
+          <section className="card">
+            <div className="browse-head">
+              <p className="eyebrow">
+                {browseMine ? 'Added by you' : 'Everything in the grove'} · {browseTotal}
+              </p>
+              <div className="browse-controls">
+                <button
+                  type="button" className={browseMine ? 'chip' : 'chip on'}
+                  onClick={() => { setBrowseMine(false); loadBrowse(0, false) }}
+                >
+                  Everyone
+                </button>
+                <button
+                  type="button" className={browseMine ? 'chip on' : 'chip'}
+                  onClick={() => { setBrowseMine(true); loadBrowse(0, true) }}
+                >
+                  Mine
+                </button>
+                <button
+                  type="button" className="chip"
+                  onClick={() => {
+                    const next = browseSort === 'artist' ? 'recent' : 'artist'
+                    setBrowseSort(next); loadBrowse(0, browseMine, next)
+                  }}
+                >
+                  {browseSort === 'artist' ? 'A–Z' : 'Newest'}
+                </button>
+              </div>
+            </div>
+
+            <p className="small muted">
+              Every song here is already confirmed — staging one costs nothing
+              and needs no lookup.
+            </p>
+
+            <SongList>
+              {browse.map((r) => (
+                <SongRow
+                  key={r.id} record={r} confidence={1}
+                  action={stageButton(candidateFromRecord(r))}
+                />
+              ))}
+            </SongList>
+
+            {browse.length < browseTotal && (
+              <div className="row-actions">
+                <button
+                  type="button" className="btn ghost" disabled={browsing}
+                  onClick={() => loadBrowse(browse.length)}
+                >
+                  {browsing ? 'Loading…' : `Show more (${browseTotal - browse.length} left)`}
+                </button>
+              </div>
+            )}
+          </section>
+        )
       )}
     </>
   )

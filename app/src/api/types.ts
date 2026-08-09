@@ -104,6 +104,10 @@ export interface Revision {
 
 export interface RecordsResponse {
   records: SongRecord[]
+  /** Present when browsing rather than searching. */
+  browse?: boolean
+  total?: number
+  offset?: number
 }
 
 export interface RemoteResponse {

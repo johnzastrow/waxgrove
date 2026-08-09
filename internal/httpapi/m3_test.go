@@ -696,3 +696,189 @@ func TestVersionIsPublicAndIdentifiesTheBuild(t *testing.T) {
 		}
 	}
 }
+
+// -------------------------------------------------------------- the stacks --
+
+// You cannot search for a song you have forgotten you added, so an empty query
+// browses the catalogue rather than returning nothing — which is what it did.
+func TestEmptyQueryBrowsesTheCatalogue(t *testing.T) {
+	c := signedIn(t)
+	c.do("POST", "/api/crate", map[string]any{
+		"candidates": []map[string]any{
+			{"title": "Pink Moon", "artist": "Nick Drake", "isrc": "GBAYE0601498"},
+			{"title": "Dreams", "artist": "Fleetwood Mac", "isrc": "USWB10101368"},
+			{"title": "Under Pressure", "artist": "Queen", "isrc": "GBUM71029604"},
+		},
+	})
+
+	body := c.mustJSON(c.do("GET", "/api/records", nil))
+	if body["browse"] != true {
+		t.Fatalf("an empty query did not browse: %v", body)
+	}
+	recs := body["records"].([]any)
+	if len(recs) != 3 {
+		t.Fatalf("browsed %d records, want 3", len(recs))
+	}
+	if body["total"].(float64) != 3 {
+		t.Errorf("total = %v, want 3", body["total"])
+	}
+	// Sorted by artist so the list is navigable rather than arbitrary.
+	first := recs[0].(map[string]any)["artist"]
+	if first != "Fleetwood Mac" {
+		t.Errorf("first artist = %v, want the list sorted by artist", first)
+	}
+}
+
+func TestBrowsePaginates(t *testing.T) {
+	c := signedIn(t)
+	cands := make([]map[string]any, 0, 5)
+	for i, name := range []string{"Aa", "Bb", "Cc", "Dd", "Ee"} {
+		cands = append(cands, map[string]any{
+			"title": name, "artist": name, "isrc": "ZZ0000000000" + string(rune('1'+i)),
+		})
+	}
+	c.do("POST", "/api/crate", map[string]any{"candidates": cands})
+
+	page := c.mustJSON(c.do("GET", "/api/records?limit=2&offset=0", nil))
+	if got := len(page["records"].([]any)); got != 2 {
+		t.Fatalf("page has %d records, want 2", got)
+	}
+	if page["total"].(float64) != 5 {
+		t.Errorf("total = %v, want the full count regardless of the page", page["total"])
+	}
+
+	next := c.mustJSON(c.do("GET", "/api/records?limit=2&offset=2", nil))
+	firstOfPage1 := page["records"].([]any)[0].(map[string]any)["id"]
+	firstOfPage2 := next["records"].([]any)[0].(map[string]any)["id"]
+	if firstOfPage1 == firstOfPage2 {
+		t.Error("the second page repeats the first")
+	}
+}
+
+// The catalogue is shared, so "mine" means what this user contributed — not a
+// private collection, which would contradict §3.0.
+func TestBrowseCanNarrowToWhatIAdded(t *testing.T) {
+	ana := signedIn(t)
+	ben := second(t, ana)
+
+	ana.do("POST", "/api/crate", map[string]any{"candidates": []map[string]any{
+		{"title": "Pink Moon", "artist": "Nick Drake", "isrc": "GBAYE0601498"},
+	}})
+	ana.do("POST", "/api/crate/commit", map[string]any{"title": "Ana's"})
+
+	ben.do("POST", "/api/crate", map[string]any{"candidates": []map[string]any{
+		{"title": "Dreams", "artist": "Fleetwood Mac", "isrc": "USWB10101368"},
+	}})
+	ben.do("POST", "/api/crate/commit", map[string]any{"title": "Ben's"})
+
+	// Everyone sees the whole shared catalogue.
+	all := ana.mustJSON(ana.do("GET", "/api/records", nil))
+	if got := all["total"].(float64); got != 2 {
+		t.Fatalf("shared catalogue has %v records, want 2", got)
+	}
+
+	mine := ben.mustJSON(ben.do("GET", "/api/records?mine=true", nil))
+	recs := mine["records"].([]any)
+	if len(recs) != 1 {
+		t.Fatalf("Ben contributed %d records, want 1", len(recs))
+	}
+	if recs[0].(map[string]any)["title"] != "Dreams" {
+		t.Errorf("got %v, want the one Ben added", recs[0])
+	}
+}
+
+// ------------------------------------------------------------ field search --
+
+func seedCatalogue(t *testing.T, c *client) {
+	t.Helper()
+	c.do("POST", "/api/crate", map[string]any{"candidates": []map[string]any{
+		{"title": "Pink Moon", "artist": "Nick Drake", "album": "Pink Moon",
+			"year": 1972, "isrc": "GBAYE0601498"},
+		{"title": "Dreams", "artist": "Fleetwood Mac", "album": "Rumours",
+			"year": 1977, "isrc": "USWB10101368"},
+		{"title": "Go Your Own Way", "artist": "Fleetwood Mac", "album": "Rumours",
+			"year": 1977, "isrc": "USWB10101369"},
+		{"title": "Moonage Daydream", "artist": "David Bowie", "album": "Ziggy Stardust",
+			"year": 1972, "isrc": "GBAAA7200001"},
+	}})
+}
+
+func titles(t *testing.T, c *client, query string) []string {
+	t.Helper()
+	body := c.mustJSON(c.do("GET", "/api/records?"+query, nil))
+	recs, _ := body["records"].([]any)
+	out := make([]string, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, r.(map[string]any)["title"].(string))
+	}
+	return out
+}
+
+// Free text still searches everything.
+func TestFlexibleSearchStillWorks(t *testing.T) {
+	c := signedIn(t)
+	seedCatalogue(t, c)
+	got := titles(t, c, "q=moon")
+	if len(got) != 2 {
+		t.Fatalf("got %v, want both the Pink Moon and the Moonage one", got)
+	}
+}
+
+// ...and a term can be confined to one field, so "Moon" the album is separable
+// from "Moon" the title.
+func TestSearchCanBeScopedToAField(t *testing.T) {
+	c := signedIn(t)
+	seedCatalogue(t, c)
+
+	if got := titles(t, c, "artist=fleetwood"); len(got) != 2 {
+		t.Errorf("artist search got %v, want the two Fleetwood Mac tracks", got)
+	}
+	if got := titles(t, c, "album=rumours"); len(got) != 2 {
+		t.Errorf("album search got %v, want the two from Rumours", got)
+	}
+	got := titles(t, c, "title=moonage")
+	if len(got) != 1 || got[0] != "Moonage Daydream" {
+		t.Errorf("title search got %v", got)
+	}
+}
+
+// A year alone is a reasonable thing to search for, and there is no text in it
+// for the index to match.
+func TestSearchByYearAlone(t *testing.T) {
+	c := signedIn(t)
+	seedCatalogue(t, c)
+	got := titles(t, c, "year=1972")
+	if len(got) != 2 {
+		t.Fatalf("got %v, want the two from 1972", got)
+	}
+}
+
+// The fields intersect rather than being separate searches the user has to
+// combine themselves.
+func TestFieldsCombine(t *testing.T) {
+	c := signedIn(t)
+	seedCatalogue(t, c)
+
+	got := titles(t, c, "artist=fleetwood&title=dreams")
+	if len(got) != 1 || got[0] != "Dreams" {
+		t.Errorf("got %v, want only Dreams", got)
+	}
+	// Free text narrows further still.
+	if got := titles(t, c, "q=moon&year=1972"); len(got) != 2 {
+		t.Errorf("got %v, want both 1972 tracks matching moon", got)
+	}
+	if got := titles(t, c, "artist=fleetwood&year=1972"); len(got) != 0 {
+		t.Errorf("got %v, want nothing — Fleetwood Mac has nothing from 1972 here", got)
+	}
+}
+
+// A stray quote from a song title must search, not become a syntax error.
+func TestScopedSearchSurvivesOddCharacters(t *testing.T) {
+	c := signedIn(t)
+	seedCatalogue(t, c)
+	for _, q := range []string{`title="`, `artist=("`, `album=*`, `q=)"(`} {
+		if rec := c.do("GET", "/api/records?"+q, nil); rec.Code != http.StatusOK {
+			t.Errorf("%s = %d, want 200", q, rec.Code)
+		}
+	}
+}

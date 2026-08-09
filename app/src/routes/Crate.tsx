@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, crate } from '../api/client'
 import type { CrateItem, Candidate, SongRecord } from '../api/types'
-import { Empty, ErrorNote, Loading, SongRow, subtitle } from '../components/bits'
+import { Empty, ErrorNote, Loading, SongList, SongRow, subtitle } from '../components/bits'
 import { Ring } from '../components/Ring'
 import { navigate, useToast } from '../router'
 
@@ -174,7 +174,7 @@ export function Crate() {
       {resolved.length > 0 && (
         <section className="card good">
           <p className="eyebrow">Ready · {resolved.length}</p>
-          <ul className="rows">
+          <SongList>
             {resolved.map((item) => (
               <SongRow
                 key={item.id}
@@ -187,7 +187,7 @@ export function Crate() {
                 }
               />
             ))}
-          </ul>
+          </SongList>
 
           <form className="commit" onSubmit={commit}>
             <label>
@@ -276,7 +276,7 @@ function Undecided({ item, onDone, onRemove }: {
 
       {open && (
         results === null ? <Loading what="Looking…" /> : (
-          <ul className="rows alts">
+          <SongList>
             {results.map((r) => (
               <SongRow
                 key={r.id} record={r} confidence={1}
@@ -303,7 +303,7 @@ function Undecided({ item, onDone, onRemove }: {
             {results.length === 0 && remote.length === 0 && (
               <li><span className="small muted">Nothing found. Try the Grove search directly.</span></li>
             )}
-          </ul>
+          </SongList>
         )
       )}
     </li>

@@ -10,6 +10,30 @@ answer that makes it useless during a bad deploy.
 
 ---
 
+## 0.5.0 — 2026-08-09
+
+Making the catalogue legible: you could search it, but not read it.
+
+### Added
+
+- **Browse the catalogue.** An empty search box now lists what is actually
+  there instead of an empty state — you cannot search for a song you have
+  forgotten you added. Filter to what you contributed, sort by artist or by
+  newest, and page through it. `Store.Records().List` behind it.
+- **Search particular fields.** The box still searches everything; title,
+  artist, album and year narrow it, and they compose — "anything mentioning
+  moon, by Drake, from 1972" is one query rather than three to intersect by
+  hand. A year alone is a valid search.
+- **Songs are labelled everywhere**, including remote results: a table with
+  column headings on a wide screen, and each value carrying its own label on a
+  phone. A dotted run of "Nick Drake · Pink Moon · 1972 · 2:08" makes the
+  reader work out which is the album and which is the year, and gets it wrong
+  for a band named after a number.
+- **The version is on screen at all times**, in the app chrome on every route
+  as well as on the sign-in page.
+
+---
+
 ## 0.4.0 — 2026-08-07
 
 First deployment to a real instance, and the round of fixes that followed from

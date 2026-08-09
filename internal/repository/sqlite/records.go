@@ -186,23 +186,67 @@ func (r *RecordRepo) enrich(ctx context.Context, rec *domain.Record, c domain.Ca
 // Search runs the local fuzzy search behind F4. Curated records only — ambient
 // records exist to speed resolution, not to fill the Grove with songs nobody
 // chose (BR-6).
+// SearchOptions is a search across everything, a search within named fields,
+// or both at once.
+//
+// Any is the free-text box; the rest narrow it. They compose — "anything
+// mentioning moon, by Drake, from 1972" is one query, not three searches the
+// user has to intersect in their head.
+type SearchOptions struct {
+	Any    string
+	Title  string
+	Artist string
+	Album  string
+	Year   int
+	Limit  int
+}
+
+// Empty reports whether there is anything to search for.
+func (o SearchOptions) Empty() bool {
+	return strings.TrimSpace(o.Any) == "" && strings.TrimSpace(o.Title) == "" &&
+		strings.TrimSpace(o.Artist) == "" && strings.TrimSpace(o.Album) == "" && o.Year == 0
+}
+
+// Search runs a free-text query, kept for callers that only have one.
 func (r *RecordRepo) Search(ctx context.Context, query string, limit int) ([]domain.Record, error) {
+	return r.SearchBy(ctx, SearchOptions{Any: query, Limit: limit})
+}
+
+// SearchBy searches the catalogue, optionally within named fields.
+//
+// FTS5 already indexes title, artist and album as separate columns, so scoping
+// a term to one of them is a column filter rather than a second query. Year is
+// an ordinary column and is filtered in SQL alongside.
+func (r *RecordRepo) SearchBy(ctx context.Context, opts SearchOptions) ([]domain.Record, error) {
+	limit := opts.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	q := strings.TrimSpace(query)
-	if q == "" {
+	if opts.Empty() {
 		return nil, nil
 	}
 
-	rows, err := r.s.Reader().QueryContext(ctx, `
-		SELECT r.id
-		  FROM records_fts f
-		  JOIN records r ON r.rowid = f.rowid
-		 WHERE records_fts MATCH ?
-		   AND r.tier = 'curated'
-		 ORDER BY rank
-		 LIMIT ?`, ftsQuery(q), limit)
+	// A year on its own is a perfectly reasonable search, and FTS has nothing
+	// to match on — so the FTS clause is only applied when there are terms.
+	match := ftsQueryFor(opts)
+	args := []any{}
+	sql := `SELECT r.id FROM records r`
+	where := ` WHERE r.tier = 'curated'`
+	order := ` ORDER BY r.norm_artist, r.norm_title`
+
+	if match != "" {
+		sql = `SELECT r.id FROM records_fts f JOIN records r ON r.rowid = f.rowid`
+		where += ` AND records_fts MATCH ?`
+		args = append(args, match)
+		order = ` ORDER BY rank`
+	}
+	if opts.Year != 0 {
+		where += ` AND r.year = ?`
+		args = append(args, opts.Year)
+	}
+	args = append(args, limit)
+
+	rows, err := r.s.Reader().QueryContext(ctx, sql+where+order+` LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -213,10 +257,105 @@ func (r *RecordRepo) Search(ctx context.Context, query string, limit int) ([]dom
 	return r.getMany(ctx, ids)
 }
 
+// ListOptions selects part of the catalogue.
+type ListOptions struct {
+	// AddedBy narrows to records this user deliberately contributed. Empty
+	// means the whole shared catalogue.
+	AddedBy string
+	Limit   int
+	Offset  int
+	// Sort is "artist" (default) or "recent".
+	Sort string
+}
+
+// List browses the local catalogue (F4).
+//
+// Search answers "where is this song"; this answers "what have we got". They
+// are different questions, and a search box cannot answer the second — you
+// cannot search for something you have forgotten you added.
+//
+// Ambient records stay out, exactly as they do in search: they exist to make
+// resolution instant and are not part of what the group chose (D11, F24).
+func (r *RecordRepo) List(ctx context.Context, opts ListOptions) ([]domain.Record, int, error) {
+	if opts.Limit <= 0 || opts.Limit > 200 {
+		opts.Limit = 50
+	}
+	if opts.Offset < 0 {
+		opts.Offset = 0
+	}
+
+	where := "r.tier = 'curated'"
+	args := []any{}
+	if opts.AddedBy != "" {
+		// A record can be contributed by several people; EXISTS avoids the
+		// duplicate rows a join would produce.
+		where += ` AND EXISTS (SELECT 1 FROM record_provenance p
+		                        WHERE p.record_id = r.id AND p.user_id = ?)`
+		args = append(args, opts.AddedBy)
+	}
+
+	var total int
+	if err := r.s.Reader().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM records r WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	order := "r.norm_artist, r.norm_title"
+	if opts.Sort == "recent" {
+		order = "r.created_at DESC"
+	}
+
+	rows, err := r.s.Reader().QueryContext(ctx,
+		`SELECT r.id FROM records r WHERE `+where+
+			` ORDER BY `+order+` LIMIT ? OFFSET ?`,
+		append(args, opts.Limit, opts.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	ids, err := scanIDs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	recs, err := r.getMany(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	return recs, total, nil
+}
+
 // ftsQuery turns free user input into a safe FTS5 prefix query. FTS5 has its
 // own expression syntax, so quoting each term prevents a stray operator from
 // changing the meaning of the query or erroring out.
 func ftsQuery(s string) string {
+	return terms(s, "")
+}
+
+// ftsQueryFor builds one FTS expression from the free-text box and the scoped
+// fields together, so they intersect rather than being run separately.
+func ftsQueryFor(o SearchOptions) string {
+	parts := make([]string, 0, 4)
+	for _, p := range []struct{ col, val string }{
+		{"", o.Any},
+		{"title", o.Title},
+		{"artist_credit", o.Artist},
+		{"album", o.Album},
+	} {
+		if t := terms(p.val, p.col); t != "" {
+			parts = append(parts, t)
+		}
+	}
+	// Space-separated is AND in FTS5, which is what "by Drake, from Rumours"
+	// means to a person.
+	return strings.Join(parts, " ")
+}
+
+// terms turns user input into a safe FTS5 prefix expression, optionally scoped
+// to one indexed column.
+//
+// Quotes are stripped rather than escaped: FTS5's grammar treats them as
+// phrase delimiters, and a stray one from a song title would otherwise turn a
+// search into a syntax error.
+func terms(s, column string) string {
 	fields := strings.Fields(s)
 	quoted := make([]string, 0, len(fields))
 	for _, f := range fields {
@@ -224,10 +363,11 @@ func ftsQuery(s string) string {
 		if f == "" {
 			continue
 		}
-		quoted = append(quoted, `"`+f+`"*`)
-	}
-	if len(quoted) == 0 {
-		return `""`
+		q := `"` + f + `"*`
+		if column != "" {
+			q = column + ":" + q
+		}
+		quoted = append(quoted, q)
 	}
 	return strings.Join(quoted, " ")
 }

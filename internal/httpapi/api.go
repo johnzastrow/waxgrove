@@ -287,14 +287,57 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request, u *domain.U
 
 // ---------------------------------------------------------------- records --
 
-func (a *API) searchRecords(w http.ResponseWriter, r *http.Request, _ *domain.User) {
-	recs, err := a.Store.Records().Search(r.Context(),
-		r.URL.Query().Get("q"), intParam(r, "limit", 50))
+// searchRecords searches the catalogue, or browses it when given no query.
+//
+// "Where is this song" and "what have we got" are different questions, and a
+// search box only answers the first — you cannot search for something you have
+// forgotten you added. An empty query therefore lists rather than returning
+// nothing, which is what it used to do.
+func (a *API) searchRecords(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	opts := sqlite.SearchOptions{
+		Any:    strings.TrimSpace(r.URL.Query().Get("q")),
+		Title:  strings.TrimSpace(r.URL.Query().Get("title")),
+		Artist: strings.TrimSpace(r.URL.Query().Get("artist")),
+		Album:  strings.TrimSpace(r.URL.Query().Get("album")),
+		Year:   intParam(r, "year", 0),
+		Limit:  intParam(r, "limit", 50),
+	}
+	// Nothing asked for means "show me what is here", not "show me nothing".
+	if opts.Empty() {
+		a.browseRecords(w, r, u)
+		return
+	}
+	recs, err := a.Store.Records().SearchBy(r.Context(), opts)
 	if err != nil {
 		internal(w, "search", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"records": recordViews(recs)})
+}
+
+func (a *API) browseRecords(w http.ResponseWriter, r *http.Request, u *domain.User) {
+	opts := sqlite.ListOptions{
+		Limit:  intParam(r, "limit", 50),
+		Offset: intParam(r, "offset", 0),
+		Sort:   r.URL.Query().Get("sort"),
+	}
+	// The catalogue is shared, so "mine" means the records this user
+	// deliberately contributed rather than a private collection (§3.0).
+	if r.URL.Query().Get("mine") == "true" {
+		opts.AddedBy = u.ID
+	}
+
+	recs, total, err := a.Store.Records().List(r.Context(), opts)
+	if err != nil {
+		internal(w, "browse records", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"records": recordViews(recs),
+		"total":   total,
+		"offset":  opts.Offset,
+		"browse":  true,
+	})
 }
 
 func (a *API) searchRemote(w http.ResponseWriter, r *http.Request, _ *domain.User) {

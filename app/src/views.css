@@ -324,6 +324,55 @@ textarea {
 }
 .first-account strong { color: var(--cream-100); }
 
-/* The running build. Quiet, but present on the sign-in screen too — during a
-   bad deploy that is the only screen anyone can reach. */
-.build { display: inline-block; margin-top: .5rem; font-size: .62rem; opacity: .55; }
+/* The running build. Quiet, but never hidden — it is on the sign-in screen
+   (during a bad deploy that is the only page anyone can reach) and in the app
+   chrome on every route. */
+.build {
+  display: inline-block; font-size: .62rem; opacity: .5;
+  color: var(--cream-300); letter-spacing: .02em; white-space: nowrap;
+}
+.gate-foot .build { margin-top: .5rem; }
+
+/* In the top bar on a phone: pinned right, next to the brand. */
+.topbar > .build { margin-left: auto; padding-left: .6rem; align-self: center; }
+
+@media (min-width: 1100px) {
+  /* In the desktop rail it sits at the foot, under the navigation, where the
+     spacer has already pushed it. */
+  .topbar > .build { margin-left: 0; padding-left: .3rem; padding-top: .6rem; }
+}
+
+/* ------------------------------------------------------- browsing the grove -- */
+/* "What have we got" is a different question from "where is this song", and a
+   search box only answers the second. */
+
+.browse-head { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; }
+.browse-head .eyebrow { margin-bottom: 0; }
+.browse-controls { display: flex; gap: .3rem; margin-left: auto; flex-wrap: wrap; }
+.chip {
+  background: transparent; border: 1px solid var(--wax-600); border-radius: 999px;
+  color: var(--cream-300); cursor: pointer;
+  padding: .25rem .7rem; min-height: 32px;
+  font-family: var(--mono); font-size: .62rem; letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.chip.on { border-color: var(--grove-500); color: var(--grove-300); background: rgba(61,86,56,.15); }
+.chip:hover { border-color: var(--grove-500); }
+
+/* ------------------------------------------------------------ field search -- */
+/* The box searches everything; the fields narrow it. Kept behind a toggle so
+   the common case stays one box, and revealed in full when it is not. */
+
+.search-more { display: flex; gap: 1rem; margin: -.6rem 0 .8rem; font-size: .78rem; }
+.search-fields {
+  border: 1px solid var(--wax-600); border-radius: 4px;
+  background: var(--wax-800); padding: .9rem 1rem; margin-bottom: 1rem;
+  display: grid; gap: .2rem .9rem;
+}
+.search-fields label { margin-top: .4rem; }
+.search-fields p { grid-column: 1 / -1; margin-top: .7rem; }
+
+@media (min-width: 640px) {
+  .search-fields { grid-template-columns: 2fr 2fr 2fr 1fr; align-items: end; }
+  .search-fields label { margin-top: 0; }
+}

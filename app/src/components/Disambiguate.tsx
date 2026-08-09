@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import type { Candidate, Unresolved } from '../api/types'
-import { SongRow, subtitle } from './bits'
+import { SongList, SongRow, subtitle } from './bits'
 import { Ring } from './Ring'
 
 interface Props {
@@ -87,7 +87,7 @@ function UnresolvedItem({ item, onChoose }: { item: Unresolved; onChoose: Props[
       </div>
 
       {open && (
-        <ul className="rows alts">
+        <SongList>
           {alts.map((alt, i) => (
             <SongRow
               key={i}
@@ -102,7 +102,7 @@ function UnresolvedItem({ item, onChoose }: { item: Unresolved; onChoose: Props[
               }
             />
           ))}
-        </ul>
+        </SongList>
       )}
 
       {alts.length === 0 && (

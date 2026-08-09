@@ -111,9 +111,37 @@ export const api = {
     }),
 
   // --- catalogue -------------------------------------------------------------
-  /** Search the shared local catalogue. Ambient records stay out of this (F24). */
-  searchRecords: (q: string, signal?: AbortSignal) =>
-    request<RecordsResponse>(`/api/records?q=${encodeURIComponent(q)}`, signal ? { signal } : {}),
+  /**
+   * Search the shared local catalogue. Ambient records stay out of this (F24).
+   *
+   * Free text and named fields compose into one query — "anything mentioning
+   * moon, by Drake, from 1972" is one search, not three the user intersects
+   * in their head.
+   */
+  searchRecords: (
+    q: string | { q?: string; title?: string; artist?: string; album?: string; year?: string },
+    signal?: AbortSignal,
+  ) => {
+    const p = typeof q === 'string' ? { q } : q
+    const s = new URLSearchParams()
+    for (const [k, v] of Object.entries(p)) if (v) s.set(k, v)
+    return request<RecordsResponse>(`/api/records?${s}`, signal ? { signal } : {})
+  },
+
+  /**
+   * Browse the catalogue rather than searching it — you cannot search for a
+   * song you have forgotten you added. `mine` narrows to what this user
+   * contributed; the catalogue itself is shared.
+   */
+  browseRecords: (opts: { mine?: boolean; limit?: number; offset?: number; sort?: string } = {},
+                  signal?: AbortSignal) => {
+    const q = new URLSearchParams()
+    if (opts.mine) q.set('mine', 'true')
+    if (opts.limit !== undefined) q.set('limit', String(opts.limit))
+    if (opts.offset !== undefined) q.set('offset', String(opts.offset))
+    if (opts.sort) q.set('sort', opts.sort)
+    return request<RecordsResponse>(`/api/records?${q}`, signal ? { signal } : {})
+  },
 
   /** Search the configured metadata source. Returns an empty set when none is (N6). */
   searchRemote: (q: string, signal?: AbortSignal) =>

@@ -16,7 +16,7 @@ import "runtime/debug"
 
 // Version is the released version. Bump it in the same commit as the change,
 // and add the CHANGELOG entry with it.
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 // Commit and BuiltAt are set with -ldflags at build time. See the Makefile.
 var (

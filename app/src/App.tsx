@@ -13,6 +13,7 @@ import { Jobs } from './routes/Jobs'
 import { Crate } from './routes/Crate'
 import { Shared } from './routes/Shared'
 import { UpdatePrompt } from './pwa'
+import { Build } from './components/Build'
 
 const NAV = [
   { to: '/', label: 'Grove' },
@@ -73,6 +74,11 @@ export function App() {
               under the brand rather than being pushed to the floor. Inert on
               phones, where the nav is a fixed bottom bar. */}
           <span className="spacer" />
+
+          {/* Always on screen, on every route. Which build is running is the
+              first thing worth knowing when something looks wrong, and
+              hunting for it in a settings page is one step too many. */}
+          <Build />
         </header>
 
         <main>
