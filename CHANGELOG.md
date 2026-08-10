@@ -10,6 +10,21 @@ answer that makes it useless during a bad deploy.
 
 ---
 
+## 0.5.2 — 2026-08-09
+
+### Fixed
+
+- **Song table columns did not line up with their headings.** Every row was its
+  own grid, and a grid sizes `fr` tracks to its own content — so the header row
+  measured the words "TITLE" and "ARTIST" while each data row measured a song.
+  Identical templates, independent grids, no possible agreement.
+
+  The list is now the grid and the rows share its tracks with `subgrid`, so
+  every column has one width. Year and length right-align, which is what makes
+  a column of numbers read as one.
+
+---
+
 ## 0.5.1 — 2026-08-09
 
 ### Fixed

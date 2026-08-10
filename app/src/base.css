@@ -214,23 +214,46 @@ label .lbl {
 .songs .c-year .v { font-size: .78rem; }
 
 @media (min-width: 820px) {
-  .rows.songs li {
+  /* The list is the grid; the rows share its tracks via subgrid.
+     
+     Each row used to be its own grid, which is why nothing lined up: a grid
+     sizes `fr` tracks to its own content, so the header row measured "TITLE"
+     and "ARTIST" while every data row measured a song. Independent grids
+     cannot agree on a column width, however identical their templates look. */
+  .rows.songs {
+    display: grid;
     grid-template-columns:
-      auto minmax(9rem, 2.2fr) minmax(7rem, 1.6fr) minmax(7rem, 1.6fr) 4rem 4rem auto;
-    grid-template-areas: "ring title artist album year len act";
-    align-items: center;
-    gap: .9rem;
+      auto                      /* ring   */
+      minmax(10rem, 2.4fr)      /* title  */
+      minmax(8rem, 1.7fr)       /* artist */
+      minmax(8rem, 1.7fr)       /* album  */
+      4.5rem                    /* year   */
+      4.5rem                    /* length */
+      auto;                     /* actions */
+    column-gap: 1rem;
   }
-  .songs .c-artist { grid-area: artist; }
-  .songs .c-album  { grid-area: album; }
-  .songs .c-year   { grid-area: year; }
-  .songs .c-len    { grid-area: len; display: block; }
-  .songs .c-act    { grid-area: act; }
+  .rows.songs li {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 0 1rem;
+  }
+
+  .songs .c-artist { grid-area: auto; }
+  .songs .c-album  { grid-area: auto; }
+  .songs .c-year   { grid-area: auto; }
+  .songs .c-len    { grid-area: auto; display: block; }
+  .songs .c-title  { grid-area: auto; }
+  .songs .c-ring   { grid-area: auto; }
+  .songs .c-act    { grid-area: auto; }
 
   /* Labels move out of the cells and become column headings. */
   .songs [data-label]::before { display: none; }
   .rows.songs li.song-head {
     display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
     border-bottom: 1px solid var(--wax-600);
     padding-bottom: .4rem; margin-bottom: .2rem;
   }
@@ -238,6 +261,11 @@ label .lbl {
     font-family: var(--mono); font-size: .55rem; letter-spacing: .12em;
     text-transform: uppercase; color: var(--cream-300); opacity: .6;
   }
+
+  /* Numbers read as a column when they share an edge. The heading follows the
+     values rather than the values following the heading. */
+  .songs .c-year, .songs .c-len,
+  .songs .song-head .c-year, .songs .song-head .c-len { text-align: right; }
   .songs .c-year .v, .songs .c-len .v { font-size: .78rem; }
 }
 
