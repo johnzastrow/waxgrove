@@ -10,6 +10,25 @@ answer that makes it useless during a bad deploy.
 
 ---
 
+## 0.5.1 — 2026-08-09
+
+### Fixed
+
+- **A field-scoped search was flattened into free text before reaching
+  MusicBrainz.** Searching for an artist returned anything mentioning the word
+  anywhere — titles included — which reads exactly like the scoping is broken.
+  The local half was always correct; the remote half threw the scope away.
+
+  MusicBrainz indexes recordings with a query syntax of its own, so the fields
+  now travel as `artist:(...)`, `recording:(...)`, `release:(...)` and
+  `firstreleasedate:`, with the values escaped so a title containing a colon
+  searches rather than failing to parse.
+
+  It only showed up on an artist absent from the local catalogue, where the
+  grove half is empty and every visible result comes from the metadata source.
+
+---
+
 ## 0.5.0 — 2026-08-09
 
 Making the catalogue legible: you could search it, but not read it.

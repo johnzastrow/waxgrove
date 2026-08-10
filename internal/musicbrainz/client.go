@@ -183,7 +183,81 @@ func (c *Client) LookupRecording(ctx context.Context, mbid string) (domain.Candi
 	return out.toCandidate(), nil
 }
 
-// Search runs a free-text recording search, backing F5.
+// SearchFields narrows a search to named fields.
+//
+// MusicBrainz indexes recordings with a Lucene query syntax, so asking for an
+// artist is a field query rather than a hope that a free-text match lands on
+// the right column. Flattening these into one string — which this used to do —
+// returns anything mentioning the word anywhere, which is the wrong answer to
+// "by this artist".
+type SearchFields struct {
+	Any    string
+	Title  string
+	Artist string
+	Album  string
+	Year   int
+}
+
+// Empty reports whether there is anything to ask for.
+func (f SearchFields) Empty() bool {
+	return strings.TrimSpace(f.Any) == "" && strings.TrimSpace(f.Title) == "" &&
+		strings.TrimSpace(f.Artist) == "" && strings.TrimSpace(f.Album) == "" && f.Year == 0
+}
+
+// Query renders the fields as a MusicBrainz search expression.
+//
+// The field names are MusicBrainz's own: a recording's title is `recording`,
+// its release is `release`, and the first release year is `firstreleasedate`.
+func (f SearchFields) Query() string {
+	parts := make([]string, 0, 5)
+	add := func(field, value string) {
+		v := strings.TrimSpace(value)
+		if v == "" {
+			return
+		}
+		if field == "" {
+			parts = append(parts, luceneEscape(v))
+			return
+		}
+		parts = append(parts, field+":("+luceneEscape(v)+")")
+	}
+	add("", f.Any)
+	add("recording", f.Title)
+	add("artist", f.Artist)
+	add("release", f.Album)
+	if f.Year != 0 {
+		parts = append(parts, fmt.Sprintf("firstreleasedate:%d*", f.Year))
+	}
+	// AND, because naming two fields means both — "by Depeche Mode, from
+	// Violator" is one record, not the union of two searches.
+	return strings.Join(parts, " AND ")
+}
+
+// luceneEscape neutralises the characters MusicBrainz's query parser treats as
+// syntax, so a title containing a colon or a bracket searches rather than
+// failing to parse.
+func luceneEscape(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '+', '-', '&', '|', '!', '(', ')', '{', '}', '[', ']',
+			'^', '"', '~', '*', '?', ':', '\\', '/':
+			b.WriteRune('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// SearchBy runs a recording search, optionally scoped to named fields (F5).
+func (c *Client) SearchBy(ctx context.Context, f SearchFields, limit int) ([]domain.Candidate, error) {
+	if f.Empty() {
+		return nil, nil
+	}
+	return c.Search(ctx, f.Query(), limit)
+}
+
+// Search runs a recording search with an already-built query expression.
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]domain.Candidate, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 25

@@ -16,6 +16,7 @@ import (
 	"github.com/johnzastrow/waxgrove/internal/domain"
 	"github.com/johnzastrow/waxgrove/internal/jobs"
 	"github.com/johnzastrow/waxgrove/internal/jspf"
+	"github.com/johnzastrow/waxgrove/internal/musicbrainz"
 	"github.com/johnzastrow/waxgrove/internal/repository/sqlite"
 	"github.com/johnzastrow/waxgrove/internal/resolve"
 	"github.com/johnzastrow/waxgrove/internal/version"
@@ -42,8 +43,13 @@ type API struct {
 }
 
 // RemoteSearch is the slice of MusicBrainz that F5 needs.
+//
+// SearchBy rather than Search: a field-scoped search has to stay scoped all the
+// way out to the metadata source. Flattening it into free text there returns
+// anything mentioning the word anywhere, which is the wrong answer to "by this
+// artist" and looks like the scoping is broken.
 type RemoteSearch interface {
-	Search(ctx context.Context, query string, limit int) ([]domain.Candidate, error)
+	SearchBy(ctx context.Context, f musicbrainz.SearchFields, limit int) ([]domain.Candidate, error)
 }
 
 type ctxKey int
@@ -350,12 +356,18 @@ func (a *API) searchRemote(w http.ResponseWriter, r *http.Request, _ *domain.Use
 		})
 		return
 	}
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" {
+	f := musicbrainz.SearchFields{
+		Any:    strings.TrimSpace(r.URL.Query().Get("q")),
+		Title:  strings.TrimSpace(r.URL.Query().Get("title")),
+		Artist: strings.TrimSpace(r.URL.Query().Get("artist")),
+		Album:  strings.TrimSpace(r.URL.Query().Get("album")),
+		Year:   intParam(r, "year", 0),
+	}
+	if f.Empty() {
 		problem(w, http.StatusBadRequest, "q is required")
 		return
 	}
-	cands, err := a.Remote.Search(r.Context(), q, intParam(r, "limit", 25))
+	cands, err := a.Remote.SearchBy(r.Context(), f, intParam(r, "limit", 25))
 	if err != nil {
 		// The client abandoned this search — almost always because the user
 		// typed another character and the debounce aborted it. That is the

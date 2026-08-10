@@ -143,9 +143,22 @@ export const api = {
     return request<RecordsResponse>(`/api/records?${q}`, signal ? { signal } : {})
   },
 
-  /** Search the configured metadata source. Returns an empty set when none is (N6). */
-  searchRemote: (q: string, signal?: AbortSignal) =>
-    request<RemoteResponse>(`/api/records/remote?q=${encodeURIComponent(q)}`, signal ? { signal } : {}),
+  /**
+   * Search the configured metadata source. Returns an empty set when none is (N6).
+   *
+   * Takes the same fields as the local search, and keeps them scoped: asking
+   * MusicBrainz for an artist has to stay a question about the artist, or the
+   * results look like the scoping is broken.
+   */
+  searchRemote: (
+    q: string | { q?: string; title?: string; artist?: string; album?: string; year?: string },
+    signal?: AbortSignal,
+  ) => {
+    const p = typeof q === 'string' ? { q } : q
+    const s = new URLSearchParams()
+    for (const [k, v] of Object.entries(p)) if (v) s.set(k, v)
+    return request<RemoteResponse>(`/api/records/remote?${s}`, signal ? { signal } : {})
+  },
 
   // --- playlists -------------------------------------------------------------
   playlists: () => request<PlaylistsResponse>('/api/playlists'),

@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, candidateFromRecord, connect, crate, jobsApi } from '../api/client'
-import type { Candidate, RemoteResponse, SongRecord } from '../api/types'
+import type { Candidate, SongRecord } from '../api/types'
 import { Empty, ErrorNote, Loading, SongList, SongRow } from '../components/bits'
 import { Link, navigate, useToast } from '../router'
 
@@ -122,18 +122,13 @@ export function Grove() {
       setSearching(true); setError(null)
 
       // Both halves run together; the remote failing must not blank the local
-      // results, which are the more useful half anyway.
-      //
-      // The metadata source takes free text only, so a field-scoped search is
-      // flattened for it. It is a coarser question, which is honest: the
-      // remote half is a suggestion, the local half is the answer.
-      const remoteTerm = [term, fields.title, fields.artist, fields.album]
-        .filter(Boolean).join(' ').trim()
+      // results, which are the more useful half anyway. Both get the same
+      // scoped query — MusicBrainz understands field searches, and flattening
+      // them here was returning anything that mentioned the word anywhere.
+      const params = { q: term, ...fields }
       Promise.allSettled([
-        api.searchRecords({ q: term, ...fields }, ac.signal),
-        remoteTerm.length >= 2
-          ? api.searchRemote(remoteTerm, ac.signal)
-          : Promise.resolve<RemoteResponse>({ candidates: [] }),
+        api.searchRecords(params, ac.signal),
+        api.searchRemote(params, ac.signal),
       ]).then(([l, r]) => {
         if (ac.signal.aborted) return
         if (l.status === 'fulfilled') setLocal(l.value.records ?? [])

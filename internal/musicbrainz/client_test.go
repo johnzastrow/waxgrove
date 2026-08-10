@@ -343,3 +343,71 @@ func TestMapRecordingEmptyIsNotFound(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+// A field-scoped search must stay scoped at MusicBrainz. Flattening it into
+// free text returns anything mentioning the word anywhere, which is the wrong
+// answer to "by this artist" and reads as broken scoping.
+func TestSearchFieldsBuildAScopedQuery(t *testing.T) {
+	cases := []struct {
+		name string
+		in   SearchFields
+		want string
+	}{
+		{"artist only", SearchFields{Artist: "Depeche Mode"}, `artist:(Depeche Mode)`},
+		{"title only", SearchFields{Title: "Enjoy the Silence"}, `recording:(Enjoy the Silence)`},
+		{"album only", SearchFields{Album: "Violator"}, `release:(Violator)`},
+		{"free text only", SearchFields{Any: "depeche"}, `depeche`},
+		{
+			"combined",
+			SearchFields{Artist: "Depeche Mode", Album: "Violator"},
+			`artist:(Depeche Mode) AND release:(Violator)`,
+		},
+		{"year", SearchFields{Year: 1990}, `firstreleasedate:1990*`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.in.Query(); got != c.want {
+				t.Errorf("Query() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A title with a colon or brackets must search, not fail to parse.
+func TestSearchFieldsEscapeQuerySyntax(t *testing.T) {
+	got := SearchFields{Title: `Fade Out (Remix): Part 1`}.Query()
+	want := `recording:(Fade Out \(Remix\)\: Part 1)`
+	if got != want {
+		t.Errorf("Query() = %s, want %s", got, want)
+	}
+}
+
+func TestSearchFieldsEmpty(t *testing.T) {
+	if !(SearchFields{}).Empty() {
+		t.Error("a blank SearchFields is not reported empty")
+	}
+	if (SearchFields{Year: 1990}).Empty() {
+		t.Error("a year alone should count as something to search for")
+	}
+	if (SearchFields{Artist: "  "}).Empty() != true {
+		t.Error("whitespace should not count as a search")
+	}
+}
+
+// The scoped query is what actually goes over the wire.
+func TestSearchBySendsTheScopedQuery(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query().Get("query")
+		_, _ = w.Write([]byte(`{"recordings":[]}`))
+	}))
+	defer srv.Close()
+
+	c := New("probe@example.test", "test", WithBaseURLs(srv.URL, srv.URL), WithBurst(5))
+	if _, err := c.SearchBy(context.Background(), SearchFields{Artist: "Depeche Mode"}, 10); err != nil {
+		t.Fatalf("SearchBy: %v", err)
+	}
+	if got != `artist:(Depeche Mode)` {
+		t.Errorf("sent query = %q, want it scoped to the artist", got)
+	}
+}
